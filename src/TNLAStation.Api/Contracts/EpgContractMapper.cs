@@ -64,10 +64,11 @@ internal static class EpgContractMapper
             AudioComponentType = program.AudioComponentType
         };
 
-    public static EpgSearchQuery ToQuery(this ScheduleSearchRequest request)
-    {
-        RuleSearchRequest option = request.Option;
-        return new EpgSearchQuery(
+    public static EpgSearchQuery ToQuery(this ScheduleSearchRequest request) =>
+        request.Option.ToSearchQuery() with { Limit = request.Limit };
+
+    public static EpgSearchQuery ToSearchQuery(this RuleSearchRequest option) =>
+        new(
             option.Keyword,
             option.IgnoreKeyword,
             option.KeyCS == true,
@@ -92,7 +93,5 @@ internal static class EpgContractMapper
             option.DurationMax,
             option.SearchPeriods?.Select(period => new EpgSearchPeriod(
                 DateTimeOffset.FromUnixTimeMilliseconds(period.StartAt),
-                DateTimeOffset.FromUnixTimeMilliseconds(period.EndAt))).ToArray(),
-            request.Limit);
-    }
+                DateTimeOffset.FromUnixTimeMilliseconds(period.EndAt))).ToArray());
 }

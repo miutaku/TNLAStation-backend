@@ -47,6 +47,7 @@ app.Use(async (context, next) =>
 app.MapOpenApi(OpenApiDocumentPath);
 app.MapEpgStationEndpoints();
 app.MapEpgPhaseTwoEndpoints();
+app.MapRuleEndpoints();
 
 app.Run();
 

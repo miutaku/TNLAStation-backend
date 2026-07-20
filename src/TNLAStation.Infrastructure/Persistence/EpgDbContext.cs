@@ -10,6 +10,8 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<EpgSyncStateEntity> SyncStates => Set<EpgSyncStateEntity>();
 
+    public DbSet<RuleEntity> Rules => Set<RuleEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -116,6 +118,61 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
                 .HasPrincipalKey(channel => new { channel.Id, channel.NetworkId, channel.ServiceId })
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_programs_channel");
+        });
+
+        modelBuilder.Entity<RuleEntity>(entity =>
+        {
+            entity.ToTable("rules");
+            entity.HasKey(item => item.Id).HasName("pk_rules");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.UpdateCount).HasColumnName("update_cnt").HasDefaultValue(0L);
+            entity.Property(item => item.IsTimeSpecification).HasColumnName("is_time_specification");
+            entity.Property(item => item.Keyword).HasColumnName("keyword");
+            entity.Property(item => item.HalfWidthKeyword).HasColumnName("half_width_keyword");
+            entity.Property(item => item.IgnoreKeyword).HasColumnName("ignore_keyword");
+            entity.Property(item => item.HalfWidthIgnoreKeyword).HasColumnName("half_width_ignore_keyword");
+            entity.Property(item => item.KeyCaseSensitive).HasColumnName("key_cs");
+            entity.Property(item => item.KeyRegularExpression).HasColumnName("key_reg_exp");
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.Description).HasColumnName("description");
+            entity.Property(item => item.Extended).HasColumnName("extended");
+            entity.Property(item => item.IgnoreKeyCaseSensitive).HasColumnName("ignore_key_cs");
+            entity.Property(item => item.IgnoreKeyRegularExpression).HasColumnName("ignore_key_reg_exp");
+            entity.Property(item => item.IgnoreName).HasColumnName("ignore_name");
+            entity.Property(item => item.IgnoreDescription).HasColumnName("ignore_description");
+            entity.Property(item => item.IgnoreExtended).HasColumnName("ignore_extended");
+            entity.Property(item => item.Gr).HasColumnName("gr");
+            entity.Property(item => item.Bs).HasColumnName("bs");
+            entity.Property(item => item.Cs).HasColumnName("cs");
+            entity.Property(item => item.Sky).HasColumnName("sky");
+            entity.Property(item => item.ChannelIdsJson).HasColumnName("channel_ids").HasColumnType("json");
+            entity.Property(item => item.GenresJson).HasColumnName("genres").HasColumnType("json");
+            entity.Property(item => item.TimesJson).HasColumnName("times").HasColumnType("json");
+            entity.Property(item => item.IsFree).HasColumnName("is_free");
+            entity.Property(item => item.DurationMin).HasColumnName("duration_min");
+            entity.Property(item => item.DurationMax).HasColumnName("duration_max");
+            entity.Property(item => item.SearchPeriodsJson).HasColumnName("search_periods").HasColumnType("json");
+            entity.Property(item => item.Enable).HasColumnName("enable");
+            entity.Property(item => item.AvoidDuplicate).HasColumnName("avoid_duplicate");
+            entity.Property(item => item.PeriodToAvoidDuplicate).HasColumnName("period_to_avoid_duplicate");
+            entity.Property(item => item.AllowEndLack).HasColumnName("allow_end_lack").HasDefaultValue(true);
+            entity.Property(item => item.TagsJson).HasColumnName("tags").HasColumnType("json");
+            entity.Property(item => item.ParentDirectoryName).HasColumnName("parent_directory_name");
+            entity.Property(item => item.Directory).HasColumnName("directory");
+            entity.Property(item => item.RecordedFormat).HasColumnName("recorded_format");
+            entity.Property(item => item.Mode1).HasColumnName("mode1");
+            entity.Property(item => item.ParentDirectoryName1).HasColumnName("parent_directory_name1");
+            entity.Property(item => item.Directory1).HasColumnName("directory1");
+            entity.Property(item => item.Mode2).HasColumnName("mode2");
+            entity.Property(item => item.ParentDirectoryName2).HasColumnName("parent_directory_name2");
+            entity.Property(item => item.Directory2).HasColumnName("directory2");
+            entity.Property(item => item.Mode3).HasColumnName("mode3");
+            entity.Property(item => item.ParentDirectoryName3).HasColumnName("parent_directory_name3");
+            entity.Property(item => item.Directory3).HasColumnName("directory3");
+            entity.Property(item => item.IsDeleteOriginalAfterEncode)
+                .HasColumnName("is_delete_original_after_encode");
+            entity.HasIndex(item => item.HalfWidthKeyword).HasDatabaseName("ix_rules_half_width_keyword");
+            entity.HasIndex(item => item.Enable).HasDatabaseName("ix_rules_enable");
         });
 
         modelBuilder.Entity<EpgSyncStateEntity>(entity =>

@@ -38,6 +38,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
 
         AddEpgStore(services, configuration.GetConnectionString(PostgresConnectionName));
+        AddRuleStore(services, configuration.GetConnectionString(PostgresConnectionName));
         AddMirakurun(services, configuration.GetSection(MirakurunOptions.SectionName).Get<MirakurunOptions>());
 
         return services;
@@ -61,6 +62,17 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEpgRepository>(provider => provider.GetRequiredService<PostgresEpgRepository>());
         services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<PostgresEpgRepository>());
         services.AddSingleton<IEpgSyncLeaseProvider>(_ => new PostgresEpgSyncLeaseProvider(connectionString));
+    }
+
+    private static void AddRuleStore(IServiceCollection services, string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            services.AddSingleton<IRuleRepository, InMemoryRuleRepository>();
+            return;
+        }
+
+        services.AddSingleton<IRuleRepository, PostgresRuleRepository>();
     }
 
     private static void AddMirakurun(IServiceCollection services, MirakurunOptions? options)
