@@ -17,6 +17,8 @@ public sealed record EncodeProgramItemResponse(long Id, string Mode, RecordedIte
 
 public sealed record StreamInfoResponse(IReadOnlyList<StreamInfoItemResponse> Items);
 
+public sealed record StartStreamResponse(long StreamId);
+
 public sealed record StreamInfoItemResponse(
     long StreamId,
     string Type,

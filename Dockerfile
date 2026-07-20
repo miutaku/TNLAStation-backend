@@ -46,6 +46,8 @@ ENV ASPNETCORE_ENVIRONMENT=Production \
     Mirakurun__BaseUrl=http://mirakurun:40772 \
     FFmpeg__ExecutablePath=/usr/bin/ffmpeg \
     FFmpeg__ProbeExecutablePath=/usr/bin/ffprobe \
+    Streaming__FfmpegPath=/usr/bin/ffmpeg \
+    Streaming__WorkDirectory=/var/lib/tnlastation/streamfiles \
     Storage__DataDirectory=/var/lib/tnlastation
 
 EXPOSE 8080

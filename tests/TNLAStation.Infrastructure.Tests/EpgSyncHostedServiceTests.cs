@@ -137,6 +137,10 @@ public sealed class EpgSyncHostedServiceTests
 
         public Exception? ServicesError { get; init; }
 
+        // 番組表の同期はチューナーの映像を読まない。
+        public ValueTask<Stream> OpenServiceStreamAsync(long channelId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public ValueTask<IReadOnlyList<MirakurunServiceDto>> GetServicesAsync(CancellationToken cancellationToken)
         {
             ServiceCalls++;

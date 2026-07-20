@@ -1,9 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi;
 using TNLAStation.Api.Endpoints;
 using TNLAStation.Api.Middleware;
+using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.DependencyInjection;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -44,13 +48,39 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+MapStreamFiles(app);
+
 app.MapOpenApi(OpenApiDocumentPath);
 app.MapEpgStationEndpoints();
 app.MapEpgPhaseTwoEndpoints();
 app.MapRuleEndpoints();
 app.MapCollectionEndpoints();
+app.MapStreamEndpoints();
 
 app.Run();
+
+static void MapStreamFiles(WebApplication app)
+{
+    StreamingOptions streaming = app.Services.GetRequiredService<IOptions<StreamingOptions>>().Value;
+    Directory.CreateDirectory(streaming.WorkDirectory);
+
+    var contentTypes = new FileExtensionContentTypeProvider();
+    contentTypes.Mappings[".m3u8"] = "application/vnd.apple.mpegurl";
+    contentTypes.Mappings[".ts"] = "video/mp2t";
+
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(streaming.WorkDirectory),
+        RequestPath = "/streamfiles",
+        ContentTypeProvider = contentTypes,
+        ServeUnknownFileTypes = false,
+        OnPrepareResponse = context =>
+        {
+            // プレイリストは数秒ごとに中身が変わる。キャッシュされると再生が止まったまま進まない。
+            context.Context.Response.Headers.CacheControl = "no-store";
+        },
+    });
+}
 
 static bool IsCompatibilityJsonResponse(HttpContext context)
 {

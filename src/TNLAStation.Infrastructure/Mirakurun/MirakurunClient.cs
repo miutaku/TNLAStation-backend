@@ -72,6 +72,28 @@ public sealed partial class MirakurunClient(
         throw new EndOfStreamException("Mirakurun event stream ended without a closing event.");
     }
 
+    public async ValueTask<Stream> OpenServiceStreamAsync(long channelId, CancellationToken cancellationToken)
+    {
+        // 放送は終わらないので、ここに受信のタイムアウトは掛けない。掛けると視聴が
+        // その秒数で切れる。応答ヘッダーが返らないまま固まる場合は視聴側が中断する。
+        var request = new HttpRequestMessage(HttpMethod.Get, $"api/services/{channelId}/stream?decode=1");
+        HttpResponseMessage response = await httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        try
+        {
+            response.EnsureSuccessStatusCode();
+            Stream content = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return new ResponseOwningStream(response, content);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
+
     public async ValueTask<ReadOnlyMemory<byte>> GetLogoAsync(
         long channelId,
         CancellationToken cancellationToken)

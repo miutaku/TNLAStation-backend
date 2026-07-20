@@ -7,6 +7,7 @@ using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Mirakurun;
 using TNLAStation.Infrastructure.Persistence;
 using TNLAStation.Infrastructure.Repositories;
+using TNLAStation.Infrastructure.Streaming;
 
 namespace TNLAStation.Infrastructure.DependencyInjection;
 
@@ -30,6 +31,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<EpgOptions>(configuration.GetSection(EpgOptions.SectionName));
         services.Configure<MirakurunOptions>(configuration.GetSection(MirakurunOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.Configure<StreamingOptions>(configuration.GetSection(StreamingOptions.SectionName));
 
         services.AddSingleton<IConfigRepository, MockConfigRepository>();
         services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
@@ -37,7 +39,6 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
         services.AddSingleton<IRecordingRepository, EmptyRecordingRepository>();
         services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
-        services.AddSingleton<IStreamRepository, EmptyStreamRepository>();
         services.AddSingleton<IRecordedTagRepository, EmptyRecordedTagRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
 
@@ -84,6 +85,9 @@ public static class InfrastructureServiceCollectionExtensions
         if (options?.IsConfigured != true)
         {
             services.AddSingleton<IChannelLogoProvider, InMemoryChannelLogoProvider>();
+            // チューナーに繋がっていない構成。視聴は始められないが、配信一覧は「いま 0 本」で正しい。
+            services.AddSingleton<IStreamRepository, EmptyStreamRepository>();
+            services.AddSingleton<ILiveStreamService, UnavailableLiveStreamService>();
             return;
         }
 
@@ -104,6 +108,10 @@ public static class InfrastructureServiceCollectionExtensions
             provider.GetRequiredService<MirakurunClient>());
         services.AddSingleton<IMirakurunClient>(provider => provider.GetRequiredService<MirakurunClient>());
         services.AddHostedService<EpgSyncHostedService>();
+
+        services.AddSingleton<LiveStreamManager>();
+        services.AddSingleton<ILiveStreamService>(provider => provider.GetRequiredService<LiveStreamManager>());
+        services.AddSingleton<IStreamRepository>(provider => provider.GetRequiredService<LiveStreamManager>());
     }
 
     private static Uri GetBaseAddress(MirakurunOptions options)
