@@ -22,6 +22,39 @@ public interface IReserveRepository
     ValueTask<long> AddAsync(CreateReserveCommand command, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// 録画中の番組。録画機構はこれから作るため、いまは常に空を返す実装しかない。
+/// 空であることは正常な状態なので、呼び出し側は「無い」ことをエラーとして扱わない。
+/// </summary>
+public interface IRecordingRepository
+{
+    ValueTask<Page<RecordedProgram>> ListAsync(RecordedQuery query, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// エンコードの実行中と待ち行列。
+/// </summary>
+public interface IEncodeQueueRepository
+{
+    ValueTask<EncodeTasks> GetAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 視聴・配信セッション。
+/// </summary>
+public interface IStreamRepository
+{
+    ValueTask<IReadOnlyList<StreamSession>> ListAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 録画へ付ける tag。
+/// </summary>
+public interface IRecordedTagRepository
+{
+    ValueTask<Page<RecordedTag>> ListAsync(RecordedTagQuery query, CancellationToken cancellationToken);
+}
+
 public interface IRuleRepository
 {
     ValueTask<Page<RecordingRule>> ListAsync(RuleQuery query, CancellationToken cancellationToken);

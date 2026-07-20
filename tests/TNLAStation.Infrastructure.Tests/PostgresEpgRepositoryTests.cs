@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using TNLAStation.Application.Abstractions;
 using TNLAStation.Application.Models;
 using TNLAStation.Domain;
@@ -173,7 +174,9 @@ public sealed class PostgresEpgRepositoryTests
     private static PostgresEpgRepository CreateRepository(
         PostgresTestDatabase database,
         EpgOptions? options = null) =>
-        new(database.ContextFactory, Options.Create(options ?? new EpgOptions()), TimeProvider.System);
+        // 検索は「終わった番組を返さない」ため現在時刻に依存する。fixture の日付を基準に時計を
+        // 固定しておかないと、日付が変わった翌日に落ちる。
+        new(database.ContextFactory, Options.Create(options ?? new EpgOptions()), new FakeTimeProvider(Now));
 
     private static EpgChannel CreateChannel(
         long id = 3_273_601_024,

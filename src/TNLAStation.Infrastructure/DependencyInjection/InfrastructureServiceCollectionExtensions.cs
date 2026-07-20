@@ -35,6 +35,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
         services.AddSingleton<IReserveRepository, InMemoryReserveRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
+        services.AddSingleton<IRecordingRepository, EmptyRecordingRepository>();
+        services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
+        services.AddSingleton<IStreamRepository, EmptyStreamRepository>();
+        services.AddSingleton<IRecordedTagRepository, EmptyRecordedTagRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
 
         AddEpgStore(services, configuration.GetConnectionString(PostgresConnectionName));

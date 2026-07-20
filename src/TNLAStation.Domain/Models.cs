@@ -116,3 +116,31 @@ public sealed record Reservation(
 /// Disk usage of one recording destination, in bytes.
 /// </summary>
 public sealed record StorageUsage(string Name, long Available, long Used, long Total);
+
+/// <summary>
+/// エンコード待ち・実行中の 1 件。
+/// </summary>
+public sealed record EncodeQueueItem(
+    long Id,
+    string Mode,
+    RecordedProgram Recorded,
+    int? Percent = null,
+    string? Log = null);
+
+/// <summary>
+/// 視聴・配信セッションの 1 件。
+/// </summary>
+public sealed record StreamSession(
+    long StreamId,
+    string Type,
+    int Mode,
+    bool IsEnable,
+    long ChannelId,
+    string Name,
+    long? ProgramId = null,
+    long? VideoFileId = null,
+    long? StartAt = null,
+    long? EndAt = null,
+    string? Description = null,
+    string? Extended = null);
+

@@ -1,3 +1,5 @@
+using TNLAStation.Domain;
+
 namespace TNLAStation.Application.Models;
 
 public sealed record RecordedQuery(
@@ -61,3 +63,9 @@ public sealed record ReserveEncodeSettings(
     bool IsDeleteOriginalAfterEncode);
 
 public sealed record Page<T>(IReadOnlyList<T> Items, int Total);
+
+public sealed record RecordedTagQuery(int? Offset = null, int? Limit = null, string? Name = null);
+
+public sealed record EncodeTasks(
+    IReadOnlyList<EncodeQueueItem> Running,
+    IReadOnlyList<EncodeQueueItem> Waiting);
