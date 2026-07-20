@@ -38,6 +38,12 @@ ScaffoldingReadMe.txt
 
 # dotenv environment variables file
 .env
+.env.*
+!.env.example
+
+# Local runtime configuration may contain credentials
+**/appsettings.Production.json
+**/appsettings.*.local.json
 
 # Others
 ~$*

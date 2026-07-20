@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  quality:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+          dotnet-quality: ga
+
+      - name: Restore and audit NuGet dependencies
+        run: >-
+          dotnet restore TNLAStation.sln
+          --force-evaluate
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+
+      - name: List vulnerable packages
+        run: dotnet list TNLAStation.sln package --vulnerable --include-transitive
+
+      - name: Verify formatting
+        run: dotnet format TNLAStation.sln --no-restore --verify-no-changes --severity warn
+
+      - name: Build
+        run: dotnet build TNLAStation.sln --configuration Release --no-restore
+
+      - name: Test
+        run: >-
+          dotnet test TNLAStation.sln
+          --configuration Release
+          --no-build
+          --logger "trx;LogFileName=tests.trx"
+          --results-directory TestResults
+
+  container:
+    name: Container
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3008
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build container image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: tnlastation-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

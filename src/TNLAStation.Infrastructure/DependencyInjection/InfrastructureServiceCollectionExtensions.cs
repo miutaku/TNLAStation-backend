@@ -1,0 +1,105 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using TNLAStation.Application.Abstractions;
+using TNLAStation.Infrastructure.Configuration;
+using TNLAStation.Infrastructure.Mirakurun;
+using TNLAStation.Infrastructure.Persistence;
+using TNLAStation.Infrastructure.Repositories;
+
+namespace TNLAStation.Infrastructure.DependencyInjection;
+
+/// <summary>
+/// Binds the infrastructure adapters an installation actually has. PostgreSQL and Mirakurun are
+/// optional so that contract tests, and a first run without a tuner, keep the same HTTP surface
+/// with in-memory adapters instead of failing at startup.
+/// </summary>
+public static class InfrastructureServiceCollectionExtensions
+{
+    public const string PostgresConnectionName = "PostgreSQL";
+
+    public static IServiceCollection AddTnlaStationInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.TryAddTimeProvider();
+        services.Configure<EpgOptions>(configuration.GetSection(EpgOptions.SectionName));
+        services.Configure<MirakurunOptions>(configuration.GetSection(MirakurunOptions.SectionName));
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+
+        services.AddSingleton<IConfigRepository, MockConfigRepository>();
+        services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
+        services.AddSingleton<IReserveRepository, InMemoryReserveRepository>();
+        services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
+        services.AddSingleton<IVersionRepository, MockVersionRepository>();
+
+        AddEpgStore(services, configuration.GetConnectionString(PostgresConnectionName));
+        AddMirakurun(services, configuration.GetSection(MirakurunOptions.SectionName).Get<MirakurunOptions>());
+
+        return services;
+    }
+
+    private static void AddEpgStore(IServiceCollection services, string? connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            services.AddSingleton<InMemoryEpgRepository>();
+            services.AddSingleton<IEpgRepository>(provider => provider.GetRequiredService<InMemoryEpgRepository>());
+            services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<InMemoryEpgRepository>());
+            services.AddSingleton<IEpgSyncLeaseProvider, InMemoryEpgSyncLeaseProvider>();
+            return;
+        }
+
+        services.AddDbContextFactory<EpgDbContext>(options => options.UseNpgsql(
+            connectionString,
+            npgsql => npgsql.MigrationsAssembly(typeof(EpgDbContext).Assembly.FullName)));
+        services.AddSingleton<PostgresEpgRepository>();
+        services.AddSingleton<IEpgRepository>(provider => provider.GetRequiredService<PostgresEpgRepository>());
+        services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<PostgresEpgRepository>());
+        services.AddSingleton<IEpgSyncLeaseProvider>(_ => new PostgresEpgSyncLeaseProvider(connectionString));
+    }
+
+    private static void AddMirakurun(IServiceCollection services, MirakurunOptions? options)
+    {
+        if (options?.IsConfigured != true)
+        {
+            services.AddSingleton<IChannelLogoProvider, InMemoryChannelLogoProvider>();
+            return;
+        }
+
+        services.AddSingleton<MirakurunEpgMapper>();
+        services.AddHttpClient<MirakurunClient>((provider, client) =>
+            {
+                MirakurunOptions current = provider.GetRequiredService<IOptions<MirakurunOptions>>().Value;
+                client.BaseAddress = GetBaseAddress(current);
+                // Per-request deadlines are applied by MirakurunClient; the event stream stays open.
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .ConfigurePrimaryHttpMessageHandler(provider =>
+            {
+                MirakurunOptions current = provider.GetRequiredService<IOptions<MirakurunOptions>>().Value;
+                return MirakurunConnection.CreateHandler(current.BaseUrl!, out _);
+            });
+        services.AddSingleton<IChannelLogoProvider>(provider =>
+            provider.GetRequiredService<MirakurunClient>());
+        services.AddHostedService<EpgSyncHostedService>();
+    }
+
+    private static Uri GetBaseAddress(MirakurunOptions options)
+    {
+        MirakurunConnection.CreateHandler(options.BaseUrl!, out Uri baseAddress).Dispose();
+        return baseAddress;
+    }
+
+    private static void TryAddTimeProvider(this IServiceCollection services)
+    {
+        if (services.All(descriptor => descriptor.ServiceType != typeof(TimeProvider)))
+        {
+            services.AddSingleton(TimeProvider.System);
+        }
+    }
+}
