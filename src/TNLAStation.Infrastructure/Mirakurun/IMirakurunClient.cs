@@ -13,6 +13,11 @@ public interface IMirakurunClient
     IAsyncEnumerable<MirakurunEventDto> ReadEventsAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// チューナーの一覧。何本あって何を受信できるかで、同時に録れる番組が決まる。
+    /// </summary>
+    ValueTask<IReadOnlyList<MirakurunTunerDto>> GetTunersAsync(CancellationToken cancellationToken);
+
+    /// <summary>
     /// 放送中の MPEG-TS を開く。呼び出し側が閉じるまでチューナーを占有し続けるので、
     /// 返ってきた <see cref="Stream"/> は必ず破棄する。
     /// </summary>

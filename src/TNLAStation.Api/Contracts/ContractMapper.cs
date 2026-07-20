@@ -72,6 +72,9 @@ internal static class ContractMapper
             Tags = item.Tags?.Select(tag => new RecordedTagResponse(tag.Id, tag.Name, tag.Color)).ToArray()
         };
 
+    public static ReserveListItemResponse ToListItemResponse(this Reservation item) =>
+        new(item.Id) { ProgramId = item.ProgramId, RuleId = item.RuleId };
+
     public static ReserveItemResponse ToResponse(this Reservation item, bool isHalfWidth) =>
         new(
             Id: item.Id,

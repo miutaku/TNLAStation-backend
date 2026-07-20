@@ -94,6 +94,43 @@ public sealed class InMemoryReserveRepository : IReserveRepository
         }
     }
 
+    public ValueTask<Reservation?> GetAsync(long reserveId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (gate)
+        {
+            return ValueTask.FromResult(reserves.SingleOrDefault(item => item.Id == reserveId));
+        }
+    }
+
+    public ValueTask<bool> DeleteAsync(long reserveId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (gate)
+        {
+            return ValueTask.FromResult(reserves.RemoveAll(item => item.Id == reserveId) > 0);
+        }
+    }
+
+    public ValueTask<bool> SetSkipAsync(long reserveId, bool isSkip, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (gate)
+        {
+            int index = reserves.FindIndex(item => item.Id == reserveId);
+            if (index < 0)
+            {
+                return ValueTask.FromResult(false);
+            }
+
+            reserves[index] = reserves[index] with { IsSkip = isSkip };
+            return ValueTask.FromResult(true);
+        }
+    }
+
     private static bool IsNormal(Reservation item) =>
         !item.IsConflict && !item.IsSkip && !item.IsOverlap;
 }

@@ -40,6 +40,17 @@ public sealed partial class MirakurunClient(
         return result ?? throw new InvalidDataException("Mirakurun returned an empty programs document.");
     }
 
+    public async ValueTask<IReadOnlyList<MirakurunTunerDto>> GetTunersAsync(
+        CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource timeout = CreateRequestTimeout(cancellationToken);
+        MirakurunTunerDto[]? result = await httpClient.GetFromJsonAsync<MirakurunTunerDto[]>(
+            "api/tuners",
+            JsonOptions,
+            timeout.Token);
+        return result ?? throw new InvalidDataException("Mirakurun returned an empty tuners document.");
+    }
+
     public async IAsyncEnumerable<MirakurunEventDto> ReadEventsAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {

@@ -12,6 +12,12 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<RuleEntity> Rules => Set<RuleEntity>();
 
+    public DbSet<ManualReserveEntity> ManualReserves => Set<ManualReserveEntity>();
+
+    public DbSet<ReserveEntity> Reserves => Set<ReserveEntity>();
+
+    public DbSet<ReserveSkipEntity> ReserveSkips => Set<ReserveSkipEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -173,6 +179,90 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
                 .HasColumnName("is_delete_original_after_encode");
             entity.HasIndex(item => item.HalfWidthKeyword).HasDatabaseName("ix_rules_half_width_keyword");
             entity.HasIndex(item => item.Enable).HasDatabaseName("ix_rules_enable");
+        });
+
+        modelBuilder.Entity<ManualReserveEntity>(entity =>
+        {
+            entity.ToTable("manual_reserves", table =>
+            {
+                table.HasCheckConstraint("ck_manual_reserves_time", "end_at > start_at");
+                table.HasCheckConstraint(
+                    "ck_manual_reserves_target",
+                    "program_id IS NOT NULL OR is_time_specified");
+            });
+            entity.HasKey(item => item.Id).HasName("pk_manual_reserves");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.ProgramId).HasColumnName("program_id");
+            entity.Property(item => item.IsTimeSpecified).HasColumnName("is_time_specified");
+            entity.Property(item => item.ChannelId).HasColumnName("channel_id");
+            entity.Property(item => item.ChannelType).HasColumnName("channel_type");
+            entity.Property(item => item.StartAt).HasColumnName("start_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.EndAt).HasColumnName("end_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.HalfWidthName).HasColumnName("half_width_name");
+            entity.Property(item => item.AllowEndLack).HasColumnName("allow_end_lack").HasDefaultValue(true);
+            entity.Property(item => item.IsDeleteOriginalAfterEncode)
+                .HasColumnName("is_delete_original_after_encode");
+            entity.Property(item => item.TagsJson).HasColumnName("tags").HasColumnType("json");
+            entity.Property(item => item.ParentDirectoryName).HasColumnName("parent_directory_name");
+            entity.Property(item => item.Directory).HasColumnName("directory");
+            entity.Property(item => item.RecordedFormat).HasColumnName("recorded_format");
+            entity.Property(item => item.Mode1).HasColumnName("mode1");
+            entity.Property(item => item.ParentDirectoryName1).HasColumnName("parent_directory_name1");
+            entity.Property(item => item.Directory1).HasColumnName("directory1");
+            entity.Property(item => item.Mode2).HasColumnName("mode2");
+            entity.Property(item => item.ParentDirectoryName2).HasColumnName("parent_directory_name2");
+            entity.Property(item => item.Directory2).HasColumnName("directory2");
+            entity.Property(item => item.Mode3).HasColumnName("mode3");
+            entity.Property(item => item.ParentDirectoryName3).HasColumnName("parent_directory_name3");
+            entity.Property(item => item.Directory3).HasColumnName("directory3");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            // 同じ番組を二度手動で予約させない。数えかたが狂うだけで、得るものがない。
+            entity.HasIndex(item => item.ProgramId)
+                .IsUnique()
+                .HasFilter("program_id IS NOT NULL")
+                .HasDatabaseName("uq_manual_reserves_program");
+            entity.HasIndex(item => item.StartAt).HasDatabaseName("ix_manual_reserves_start_at");
+        });
+
+        modelBuilder.Entity<ReserveEntity>(entity =>
+        {
+            entity.ToTable("reserves", table =>
+                table.HasCheckConstraint("ck_reserves_time", "end_at > start_at"));
+            entity.HasKey(item => item.Id).HasName("pk_reserves");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.Key).HasColumnName("key");
+            entity.Property(item => item.Source).HasColumnName("source");
+            entity.Property(item => item.RuleId).HasColumnName("rule_id");
+            entity.Property(item => item.ProgramId).HasColumnName("program_id");
+            entity.Property(item => item.ManualReserveId).HasColumnName("manual_reserve_id");
+            entity.Property(item => item.ChannelId).HasColumnName("channel_id");
+            entity.Property(item => item.ChannelType).HasColumnName("channel_type");
+            entity.Property(item => item.StartAt).HasColumnName("start_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.EndAt).HasColumnName("end_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.HalfWidthName).HasColumnName("half_width_name");
+            entity.Property(item => item.IsSkip).HasColumnName("is_skip");
+            entity.Property(item => item.IsConflict).HasColumnName("is_conflict");
+            entity.Property(item => item.IsOverlap).HasColumnName("is_overlap");
+            entity.Property(item => item.TunerIndex).HasColumnName("tuner_index");
+            entity.Property(item => item.GeneratedAt).HasColumnName("generated_at").HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => item.Key).IsUnique().HasDatabaseName("uq_reserves_key");
+            entity.HasIndex(item => item.StartAt).HasDatabaseName("ix_reserves_start_at");
+            entity.HasIndex(item => item.RuleId).HasDatabaseName("ix_reserves_rule");
+            entity.HasOne(item => item.ManualReserve)
+                .WithMany()
+                .HasForeignKey(item => item.ManualReserveId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_reserves_manual_reserve");
+        });
+
+        modelBuilder.Entity<ReserveSkipEntity>(entity =>
+        {
+            entity.ToTable("reserve_skips");
+            entity.HasKey(item => item.Key).HasName("pk_reserve_skips");
+            entity.Property(item => item.Key).HasColumnName("key");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         });
 
         modelBuilder.Entity<EpgSyncStateEntity>(entity =>

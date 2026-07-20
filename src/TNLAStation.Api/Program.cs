@@ -55,6 +55,7 @@ app.MapEpgStationEndpoints();
 app.MapEpgPhaseTwoEndpoints();
 app.MapRuleEndpoints();
 app.MapCollectionEndpoints();
+app.MapReserveEndpoints();
 app.MapStreamEndpoints();
 
 app.Run();

@@ -4,6 +4,22 @@ namespace TNLAStation.Api.Contracts;
 
 public sealed record ReservesResponse(IReadOnlyList<ReserveItemResponse> Reserves, int Total);
 
+/// <summary>
+/// 期間内の予約を状態ごとに分けた一覧。番組表の画面が、どの番組が予約済みかを引くのに使う。
+/// </summary>
+public sealed record ReserveListsResponse(
+    IReadOnlyList<ReserveListItemResponse> Normal,
+    IReadOnlyList<ReserveListItemResponse> Conflicts,
+    IReadOnlyList<ReserveListItemResponse> Skips,
+    IReadOnlyList<ReserveListItemResponse> Overlaps);
+
+public sealed record ReserveListItemResponse(long ReserveId)
+{
+    public long? ProgramId { get; init; }
+
+    public long? RuleId { get; init; }
+}
+
 public sealed record ReserveItemResponse(
     long Id,
     bool IsSkip,

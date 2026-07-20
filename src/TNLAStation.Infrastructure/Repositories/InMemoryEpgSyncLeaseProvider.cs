@@ -2,7 +2,7 @@ using TNLAStation.Application.Abstractions;
 
 namespace TNLAStation.Infrastructure.Repositories;
 
-public sealed class InMemoryEpgSyncLeaseProvider : IEpgSyncLeaseProvider, IDisposable
+public sealed class InMemoryEpgSyncLeaseProvider : IEpgSyncLeaseProvider, IReserveGenerationLeaseProvider, IDisposable
 {
     private readonly SemaphoreSlim semaphore = new(1, 1);
 

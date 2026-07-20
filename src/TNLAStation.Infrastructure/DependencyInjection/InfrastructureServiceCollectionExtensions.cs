@@ -7,6 +7,7 @@ using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Mirakurun;
 using TNLAStation.Infrastructure.Persistence;
 using TNLAStation.Infrastructure.Repositories;
+using TNLAStation.Infrastructure.Reserves;
 using TNLAStation.Infrastructure.Streaming;
 
 namespace TNLAStation.Infrastructure.DependencyInjection;
@@ -32,10 +33,10 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<MirakurunOptions>(configuration.GetSection(MirakurunOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.Configure<StreamingOptions>(configuration.GetSection(StreamingOptions.SectionName));
+        services.Configure<ReserveOptions>(configuration.GetSection(ReserveOptions.SectionName));
 
         services.AddSingleton<IConfigRepository, MockConfigRepository>();
         services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
-        services.AddSingleton<IReserveRepository, InMemoryReserveRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
         services.AddSingleton<IRecordingRepository, EmptyRecordingRepository>();
         services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
@@ -57,6 +58,7 @@ public static class InfrastructureServiceCollectionExtensions
             services.AddSingleton<IEpgRepository>(provider => provider.GetRequiredService<InMemoryEpgRepository>());
             services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<InMemoryEpgRepository>());
             services.AddSingleton<IEpgSyncLeaseProvider, InMemoryEpgSyncLeaseProvider>();
+            services.AddSingleton<IReserveGenerationLeaseProvider, InMemoryEpgSyncLeaseProvider>();
             return;
         }
 
@@ -67,6 +69,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEpgRepository>(provider => provider.GetRequiredService<PostgresEpgRepository>());
         services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<PostgresEpgRepository>());
         services.AddSingleton<IEpgSyncLeaseProvider>(_ => new PostgresEpgSyncLeaseProvider(connectionString));
+        services.AddSingleton<IReserveGenerationLeaseProvider>(_ => new PostgresReserveLeaseProvider(connectionString));
     }
 
     private static void AddRuleStore(IServiceCollection services, string? connectionString)
@@ -74,10 +77,16 @@ public static class InfrastructureServiceCollectionExtensions
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             services.AddSingleton<IRuleRepository, InMemoryRuleRepository>();
+            services.AddSingleton<IReserveRepository, InMemoryReserveRepository>();
             return;
         }
 
         services.AddSingleton<IRuleRepository, PostgresRuleRepository>();
+        services.AddSingleton<PostgresReserveRepository>();
+        services.AddSingleton<IReserveRepository>(provider =>
+            provider.GetRequiredService<PostgresReserveRepository>());
+        services.AddSingleton<IReserveStore>(provider =>
+            provider.GetRequiredService<PostgresReserveRepository>());
     }
 
     private static void AddMirakurun(IServiceCollection services, MirakurunOptions? options)
@@ -88,6 +97,8 @@ public static class InfrastructureServiceCollectionExtensions
             // チューナーに繋がっていない構成。視聴は始められないが、配信一覧は「いま 0 本」で正しい。
             services.AddSingleton<IStreamRepository, EmptyStreamRepository>();
             services.AddSingleton<ILiveStreamService, UnavailableLiveStreamService>();
+            // チューナーの本数が分からないので予約は作れない。作り直しの依頼は空振りさせる。
+            services.AddSingleton<IReserveGenerationTrigger, NoReserveGenerationTrigger>();
             return;
         }
 
@@ -108,6 +119,12 @@ public static class InfrastructureServiceCollectionExtensions
             provider.GetRequiredService<MirakurunClient>());
         services.AddSingleton<IMirakurunClient>(provider => provider.GetRequiredService<MirakurunClient>());
         services.AddHostedService<EpgSyncHostedService>();
+
+        // 予約の生成にはチューナーの本数が要るので、Mirakurun がある構成でだけ動かす。
+        services.AddSingleton<ReserveGenerator>();
+        services.AddSingleton<IReserveGenerationTrigger>(provider =>
+            provider.GetRequiredService<ReserveGenerator>());
+        services.AddHostedService<ReserveGenerationHostedService>();
 
         services.AddSingleton<LiveStreamManager>();
         services.AddSingleton<ILiveStreamService>(provider => provider.GetRequiredService<LiveStreamManager>());

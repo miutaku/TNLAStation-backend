@@ -20,6 +20,46 @@ public interface IReserveRepository
     ValueTask<Page<Reservation>> ListAsync(ReserveQuery query, CancellationToken cancellationToken);
 
     ValueTask<long> AddAsync(CreateReserveCommand command, CancellationToken cancellationToken);
+
+    ValueTask<Reservation?> GetAsync(long reserveId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 予約を取り消す。手動予約は消えるが、ルールが作った予約は消しても次の生成で戻ってくる
+    /// ので、除外として残す。上流も同じで、画面の「削除」はこの 2 つを兼ねている。
+    /// </summary>
+    ValueTask<bool> DeleteAsync(long reserveId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 録る・録らないの指定。予約の行ではなく、作り直しても変わらない鍵に紐づけて残す。
+    /// </summary>
+    ValueTask<bool> SetSkipAsync(long reserveId, bool isSkip, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 予約の作り直しを頼む。定期実行を待たずに反映したい場面 (ルールを変えた直後など) がある。
+/// </summary>
+public interface IReserveGenerationTrigger
+{
+    ValueTask RequestAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 予約生成が読み書きする面。手動予約と skip は入力、予約一覧は出力。
+/// </summary>
+public interface IReserveStore
+{
+    ValueTask<IReadOnlyList<ManualReserve>> ListManualReservesAsync(CancellationToken cancellationToken);
+
+    ValueTask<IReadOnlyDictionary<string, bool>> ListSkipStatesAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 生成した予約で丸ごと置き換える。番組表が変われば録るものも変わるので、差分ではなく
+    /// 作り直す。手動予約そのものはこの入れ替えでは消えない。
+    /// </summary>
+    ValueTask ReplaceAsync(
+        IReadOnlyList<ReserveAssignment> assignments,
+        DateTimeOffset generatedAt,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

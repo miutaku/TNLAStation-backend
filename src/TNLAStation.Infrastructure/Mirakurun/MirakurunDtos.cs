@@ -36,6 +36,22 @@ public sealed class MirakurunServiceDto
     public MirakurunChannelDto? Channel { get; init; }
 }
 
+/// <summary>
+/// チューナー 1 本。予約の割り当てには、受信できる放送波と、いま使える状態かだけが要る。
+/// </summary>
+public sealed class MirakurunTunerDto
+{
+    public int Index { get; init; }
+
+    public required string Name { get; init; }
+
+    public IReadOnlyList<string> Types { get; init; } = [];
+
+    public bool IsAvailable { get; init; }
+
+    public bool IsFault { get; init; }
+}
+
 public sealed class MirakurunProgramDto
 {
     public long Id { get; init; }
