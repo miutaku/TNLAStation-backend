@@ -10,7 +10,7 @@ using TNLAStation.Infrastructure.Configuration;
 namespace TNLAStation.Infrastructure.Mirakurun;
 
 public sealed partial class EpgSyncHostedService(
-    MirakurunClient client,
+    IMirakurunClient client,
     MirakurunEpgMapper mapper,
     IEpgStore store,
     IEpgSyncLeaseProvider leaseProvider,
@@ -34,7 +34,7 @@ public sealed partial class EpgSyncHostedService(
             if (lease is null)
             {
                 LogLeaseUnavailable(logger);
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(30), timeProvider, stoppingToken);
                 continue;
             }
 
@@ -73,7 +73,7 @@ public sealed partial class EpgSyncHostedService(
                 retryCount = Math.Min(retryCount + 1, 6);
                 double maximumSeconds = Math.Min(60, Math.Pow(2, retryCount));
                 TimeSpan delay = TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * maximumSeconds * 1000);
-                await Task.Delay(delay, cancellationToken);
+                await Task.Delay(delay, timeProvider, cancellationToken);
             }
         }
     }

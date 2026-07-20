@@ -10,7 +10,7 @@ namespace TNLAStation.Infrastructure.Mirakurun;
 public sealed partial class MirakurunClient(
     HttpClient httpClient,
     IOptions<MirakurunOptions> options,
-    ILogger<MirakurunClient> logger) : IChannelLogoProvider
+    ILogger<MirakurunClient> logger) : IMirakurunClient, IChannelLogoProvider
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {

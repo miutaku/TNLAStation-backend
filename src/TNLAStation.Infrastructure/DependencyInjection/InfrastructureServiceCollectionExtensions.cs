@@ -98,6 +98,7 @@ public static class InfrastructureServiceCollectionExtensions
             });
         services.AddSingleton<IChannelLogoProvider>(provider =>
             provider.GetRequiredService<MirakurunClient>());
+        services.AddSingleton<IMirakurunClient>(provider => provider.GetRequiredService<MirakurunClient>());
         services.AddHostedService<EpgSyncHostedService>();
     }
 
