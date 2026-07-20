@@ -21,11 +21,8 @@ csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = false:suggestion
 
-# EF Core migrations follow the shape emitted by the migration tooling. Reshaping
-# their literal arrays would diverge from regenerated output without any runtime
-# benefit, since each migration statement runs once per deployment.
 [src/TNLAStation.Infrastructure/Persistence/Migrations/*.cs]
-dotnet_diagnostic.CA1861.severity = none
+generated_code = true
 
 [*.{json,yml,yaml,md}]
 indent_style = space

@@ -8,7 +8,9 @@ COPY src/TNLAStation.Domain/TNLAStation.Domain.csproj src/TNLAStation.Domain/
 COPY src/TNLAStation.Application/TNLAStation.Application.csproj src/TNLAStation.Application/
 COPY src/TNLAStation.Infrastructure/TNLAStation.Infrastructure.csproj src/TNLAStation.Infrastructure/
 COPY src/TNLAStation.Api/TNLAStation.Api.csproj src/TNLAStation.Api/
-RUN dotnet restore src/TNLAStation.Api/TNLAStation.Api.csproj
+COPY src/TNLAStation.Migrator/TNLAStation.Migrator.csproj src/TNLAStation.Migrator/
+RUN dotnet restore src/TNLAStation.Api/TNLAStation.Api.csproj \
+    && dotnet restore src/TNLAStation.Migrator/TNLAStation.Migrator.csproj
 
 FROM restore AS publish
 ARG BUILD_CONFIGURATION=Release
@@ -17,6 +19,13 @@ RUN dotnet publish src/TNLAStation.Api/TNLAStation.Api.csproj \
     --configuration "$BUILD_CONFIGURATION" \
     --no-restore \
     --output /app/publish \
+    /p:UseAppHost=false
+# The migrator ships in the same image so that schema changes and the code that
+# depends on them are always released together, while staying a separate process.
+RUN dotnet publish src/TNLAStation.Migrator/TNLAStation.Migrator.csproj \
+    --configuration "$BUILD_CONFIGURATION" \
+    --no-restore \
+    --output /app/publish-migrator \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
@@ -30,6 +39,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish/ ./
+COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish-migrator/ ./migrator/
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS=8080 \

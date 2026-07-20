@@ -1,5 +1,7 @@
 **
 !Dockerfile
+# The image build must apply the same analyzer configuration as a local build.
+!.editorconfig
 !global.json
 !Directory.Build.props
 !Directory.Packages.props
