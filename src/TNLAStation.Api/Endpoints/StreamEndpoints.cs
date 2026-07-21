@@ -1,6 +1,8 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 using TNLAStation.Api.Contracts;
 using TNLAStation.Application.Abstractions;
+using TNLAStation.Domain;
 
 namespace TNLAStation.Api.Endpoints;
 
@@ -22,6 +24,22 @@ internal static class StreamEndpoints
         streams.MapGet("/live/{channelId:long}/m2ts", GetLiveM2tsAsync)
             .WithName("GetLiveM2ts")
             .WithSummary("ライブ M2TS ストリーム")
+            .WithTags("streams");
+
+        // mp4・webm・m2tsll。HLS と違って途中のファイルを作らず、1 本の流れとして配る。
+        streams.MapGet("/live/{channelId:long}/{format:regex(^(mp4|webm|m2tsll)$)}", GetLiveTranscodedAsync)
+            .WithName("GetLiveTranscodedStream")
+            .WithSummary("ライブ配信 (変換)")
+            .WithTags("streams");
+
+        streams.MapGet("/recorded/{videoFileId:long}/{format:regex(^(mp4|webm)$)}", GetRecordedTranscodedAsync)
+            .WithName("GetRecordedTranscodedStream")
+            .WithSummary("録画配信 (変換)")
+            .WithTags("streams");
+
+        streams.MapGet("/live/{channelId:long}/m2ts/playlist", GetLiveM2tsPlaylistAsync)
+            .WithName("GetLiveM2tsPlaylist")
+            .WithSummary("ライブ M2TS のプレイリスト")
             .WithTags("streams");
 
         streams.MapGet("/recorded/{videoFileId:long}/hls", StartRecordedHlsAsync)
@@ -73,6 +91,82 @@ internal static class StreamEndpoints
         // 放送は終わらないので長さは書けない。書けば、そこで切れたと受け取られる。
         await source.CopyToAsync(context.Response.Body, cancellationToken);
         return Results.Empty;
+    }
+
+    private static async Task<IResult> GetLiveTranscodedAsync(
+        long channelId,
+        string format,
+        HttpContext context,
+        ILiveStreamService streams,
+        [FromQuery] int mode = 0,
+        CancellationToken cancellationToken = default)
+    {
+        TranscodedOutput output = await streams.OpenTranscodedLiveAsync(
+            channelId,
+            format,
+            mode,
+            cancellationToken);
+        return await WriteAsync(context, output, cancellationToken);
+    }
+
+    private static async Task<IResult> GetRecordedTranscodedAsync(
+        long videoFileId,
+        string format,
+        HttpContext context,
+        ILiveStreamService streams,
+        [FromQuery] int mode = 0,
+        [FromQuery] double ss = 0,
+        CancellationToken cancellationToken = default)
+    {
+        TranscodedOutput output = await streams.OpenTranscodedRecordedAsync(
+            videoFileId,
+            format,
+            mode,
+            ss,
+            cancellationToken);
+        return await WriteAsync(context, output, cancellationToken);
+    }
+
+    private static async Task<IResult> WriteAsync(
+        HttpContext context,
+        TranscodedOutput output,
+        CancellationToken cancellationToken)
+    {
+        await using Stream content = output.Content;
+        context.Response.ContentType = output.ContentType;
+        // 変換しながら出すので長さは書けない。書けば、そこで切れたと受け取られる。
+        await content.CopyToAsync(context.Response.Body, cancellationToken);
+        return Results.Empty;
+    }
+
+    /// <summary>
+    /// そのまま流す口を指す 1 枚。動画の URL を直接渡せない再生機のために挟む。
+    /// </summary>
+    private static async Task<IResult> GetLiveM2tsPlaylistAsync(
+        long channelId,
+        HttpContext context,
+        IEpgRepository epg,
+        [FromQuery] int mode = 0,
+        CancellationToken cancellationToken = default)
+    {
+        EpgChannel? channel = await epg.GetChannelAsync(channelId, cancellationToken);
+        if (channel is null)
+        {
+            return Results.Json(
+                new ErrorResponse(StatusCodes.Status404NotFound, "channel is not found"),
+                statusCode: StatusCodes.Status404NotFound);
+        }
+
+        HttpRequest request = context.Request;
+        string id = channelId.ToString(CultureInfo.InvariantCulture);
+        string playlist = string.Join(
+            '\n',
+            "#EXTM3U",
+            $"#EXTINF:-1,{channel.Name}",
+            $"{request.Scheme}://{request.Host}/api/streams/live/{id}/m2ts?mode={mode.ToString(CultureInfo.InvariantCulture)}",
+            string.Empty);
+
+        return Results.Text(playlist, "application/x-mpegURL");
     }
 
     private static async Task<IResult> StartRecordedHlsAsync(

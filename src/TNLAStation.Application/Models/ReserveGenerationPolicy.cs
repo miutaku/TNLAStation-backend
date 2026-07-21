@@ -50,11 +50,13 @@ public static class ReserveGenerationPolicy
             targets.AddRange(CollectRuleTargets(rule, input, manualProgramIds));
         }
 
-        return input.SkipStates is null or { Count: 0 }
-            ? targets
-            : [.. targets.Select(target => input.SkipStates.TryGetValue(target.Key, out bool isSkip) && isSkip
-                ? target with { IsSkip = true }
-                : target)];
+        ReserveStates states = input.States ?? ReserveStates.Empty;
+        return [.. targets.Select(target => target with
+        {
+            IsSkip = target.IsSkip || states.Skipped.Contains(target.Key),
+            // 重複の判断を人が覆していれば、判断し直さずそのまま録る。
+            IsOverlap = target.IsOverlap && !states.OverlapCleared.Contains(target.Key),
+        })];
     }
 
     /// <summary>

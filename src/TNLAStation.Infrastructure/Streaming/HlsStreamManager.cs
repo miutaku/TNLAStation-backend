@@ -17,6 +17,51 @@ namespace TNLAStation.Infrastructure.Streaming;
 /// </summary>
 public sealed partial class HlsStreamManager : ILiveStreamService, IStreamRepository, IAsyncDisposable
 {
+    /// <summary>
+    /// 設定が無いときの出力。mp4 は fragmented にする。長さの分かる普通の mp4 は、
+    /// 全部書き終わるまで再生を始められないので、流しながらでは使えない。
+    /// </summary>
+    private static readonly StreamFormatOptions[] DefaultFormats =
+    [
+        new()
+        {
+            Name = "mp4",
+            ContentType = "video/mp4",
+            Arguments =
+            [
+                "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main",
+                "-c:a", "aac",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "-f", "mp4",
+            ],
+        },
+        new()
+        {
+            Name = "webm",
+            ContentType = "video/webm",
+            // VP8 を実時間で作る。画質より間に合うことを優先する設定で、これでも重い。
+            Arguments =
+            [
+                "-c:v", "libvpx", "-deadline", "realtime", "-cpu-used", "8",
+                "-c:a", "libopus",
+                "-f", "webm",
+            ],
+        },
+        new()
+        {
+            Name = "m2tsll",
+            ContentType = "video/mp2t",
+            // 遅れを詰めた MPEG-TS。溜め込まずに出す。
+            Arguments =
+            [
+                "-c:v", "libx264", "-preset", "ultrafast", "-tune", "zerolatency", "-profile:v", "main",
+                "-c:a", "aac",
+                "-flush_packets", "1",
+                "-f", "mpegts",
+            ],
+        },
+    ];
+
     private static readonly LiveStreamModeOptions[] DefaultModes =
     [
         new() { Name = "720p", Height = 720, VideoBitrate = "3000k", AudioBitrate = "192k" },
@@ -184,6 +229,131 @@ public sealed partial class HlsStreamManager : ILiveStreamService, IStreamReposi
         await session.DisposeAsync();
         LogStreamStopped(logger, streamId, "requested");
         return true;
+    }
+
+    /// <summary>
+    /// 変換しながら 1 本の流れとして配る。HLS と違って途中のファイルを作らないので、
+    /// 遅れは小さいが、途中から見ることも巻き戻すこともできない。
+    /// </summary>
+    public async ValueTask<TranscodedOutput> OpenTranscodedLiveAsync(
+        long channelId,
+        string format,
+        int mode,
+        CancellationToken cancellationToken)
+    {
+        _ = await epg.GetChannelAsync(channelId, cancellationToken)
+            ?? throw new LiveStreamException("ChannelIsNotFound");
+        StreamFormatOptions output = ResolveFormat(format);
+        LiveStreamModeOptions quality = ResolveMode(mode);
+
+        Stream source = await mirakurun.OpenServiceStreamAsync(channelId, cancellationToken);
+        try
+        {
+            ProcessOutputStream stream = StartTranscode("pipe:0", quality, output, source, playPosition: null);
+            stream.StartPump();
+            return new TranscodedOutput(stream, output.ContentType);
+        }
+        catch
+        {
+            await source.DisposeAsync();
+            throw;
+        }
+    }
+
+    public async ValueTask<TranscodedOutput> OpenTranscodedRecordedAsync(
+        long videoFileId,
+        string format,
+        int mode,
+        double playPosition,
+        CancellationToken cancellationToken)
+    {
+        VideoFileLocation file = await videoFiles.GetAsync(videoFileId, cancellationToken)
+            ?? throw new LiveStreamException("VideoFileIsNotFound");
+        if (!File.Exists(file.FullPath))
+        {
+            throw new LiveStreamException("VideoFileIsNotFound");
+        }
+
+        StreamFormatOptions output = ResolveFormat(format);
+        LiveStreamModeOptions quality = ResolveMode(mode);
+        return new TranscodedOutput(
+            StartTranscode(file.FullPath, quality, output, source: null, playPosition),
+            output.ContentType);
+    }
+
+    private ProcessOutputStream StartTranscode(
+        string input,
+        LiveStreamModeOptions quality,
+        StreamFormatOptions output,
+        Stream? source,
+        double? playPosition)
+    {
+        var startInfo = new ProcessStartInfo(options.FfmpegPath)
+        {
+            RedirectStandardInput = source is not null,
+            RedirectStandardOutput = true,
+            RedirectStandardError = false,
+            UseShellExecute = false,
+        };
+        foreach (string argument in CreateTranscodeArguments(input, quality, output, playPosition))
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        Process process = Process.Start(startInfo)
+            ?? throw new LiveStreamException("StreamProcessStartFailed");
+        return new ProcessOutputStream(process, source);
+    }
+
+    private static string[] CreateTranscodeArguments(
+        string input,
+        LiveStreamModeOptions quality,
+        StreamFormatOptions output,
+        double? playPosition)
+    {
+        var arguments = new List<string>
+        {
+            "-hide_banner",
+            "-loglevel", "error",
+            "-fflags", "+discardcorrupt",
+        };
+
+        if (input == "pipe:0")
+        {
+            // 流れてくる先を戻して読み直せないので、ffmpeg は形式の判別に失敗することがある。
+            // 失敗すると 1 バイトも出さずに待ち続けるので、放送波だと分かっている以上は明示する。
+            arguments.AddRange(["-f", "mpegts"]);
+        }
+
+        arguments.AddRange(["-analyzeduration", "10M", "-probesize", "32M"]);
+
+        if (playPosition is { } position and > 0)
+        {
+            arguments.Add("-ss");
+            arguments.Add(position.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        arguments.AddRange(["-dual_mono_mode", "main", "-i", input]);
+        arguments.AddRange(["-map", "0:v:0", "-map", "0:a:0", "-ignore_unknown", "-sn", "-dn"]);
+        arguments.AddRange([
+            "-vf", $"yadif,scale=-2:{quality.Height.ToString(CultureInfo.InvariantCulture)}",
+            "-b:v", quality.VideoBitrate,
+            "-maxrate", quality.VideoBitrate,
+            "-bufsize", quality.VideoBitrate,
+            "-b:a", quality.AudioBitrate,
+            "-ar", "48000",
+            "-ac", "2",
+        ]);
+        arguments.AddRange(output.Arguments);
+        arguments.Add("pipe:1");
+        return [.. arguments];
+    }
+
+    private StreamFormatOptions ResolveFormat(string name)
+    {
+        IReadOnlyList<StreamFormatOptions> formats = options.Formats.Count > 0 ? options.Formats : DefaultFormats;
+        return formats.FirstOrDefault(format => string.Equals(format.Name, name, StringComparison.OrdinalIgnoreCase))
+            ?? throw new LiveStreamException("StreamFormatIsNotFound");
     }
 
     public async ValueTask<Stream> OpenLiveStreamAsync(long channelId, CancellationToken cancellationToken)

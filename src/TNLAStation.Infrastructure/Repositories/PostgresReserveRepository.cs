@@ -142,28 +142,96 @@ public sealed class PostgresReserveRepository(
             return false;
         }
 
-        if (isSkip)
-        {
-            if (!await context.ReserveSkips.AnyAsync(skip => skip.Key == reserve.Key, cancellationToken))
-            {
-                context.ReserveSkips.Add(new ReserveSkipEntity
-                {
-                    Key = reserve.Key,
-                    CreatedAt = timeProvider.GetUtcNow(),
-                });
-            }
-        }
-        else
-        {
-            await context.ReserveSkips
-                .Where(skip => skip.Key == reserve.Key)
-                .ExecuteDeleteAsync(cancellationToken);
-        }
+        ReserveStateEntity state = await GetOrCreateStateAsync(context, reserve.Key, cancellationToken);
+        state.IsSkip = isSkip;
 
         // 次の生成を待たずに一覧へ反映する。押した直後に変わらないと、効いたか分からない。
         reserve.IsSkip = isSkip;
         await context.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async ValueTask<bool> ClearOverlapAsync(long reserveId, CancellationToken cancellationToken)
+    {
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        ReserveEntity? reserve = await context.Reserves
+            .SingleOrDefaultAsync(item => item.Id == reserveId, cancellationToken);
+        if (reserve is null)
+        {
+            return false;
+        }
+
+        ReserveStateEntity state = await GetOrCreateStateAsync(context, reserve.Key, cancellationToken);
+        state.IsOverlapCleared = true;
+        reserve.IsOverlap = false;
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    /// <summary>
+    /// 手動予約を差し替える。時刻や番組そのものは変えない。変えたいなら別の予約であって、
+    /// 同じ予約を書き換えるのとは意味が違う。
+    /// </summary>
+    public async ValueTask<bool> UpdateAsync(
+        long reserveId,
+        CreateReserveCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        ReserveEntity? reserve = await context.Reserves.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.Id == reserveId, cancellationToken);
+        if (reserve?.ManualReserveId is not { } manualId)
+        {
+            return false;
+        }
+
+        ManualReserveEntity? manual = await context.ManualReserves
+            .SingleOrDefaultAsync(item => item.Id == manualId, cancellationToken);
+        if (manual is null)
+        {
+            return false;
+        }
+
+        manual.AllowEndLack = command.AllowEndLack;
+        manual.Priority = command.Priority;
+        manual.IsDeleteOriginalAfterEncode = command.Encode?.IsDeleteOriginalAfterEncode ?? false;
+        manual.TagsJson = command.Tags is { Count: > 0 }
+            ? JsonSerializer.Serialize(command.Tags, JsonOptions)
+            : null;
+        manual.ParentDirectoryName = command.Save?.ParentDirectoryName;
+        manual.Directory = command.Save?.Directory;
+        manual.RecordedFormat = command.Save?.RecordedFormat;
+        manual.Mode1 = command.Encode?.Mode1;
+        manual.ParentDirectoryName1 = command.Encode?.EncodeParentDirectoryName1;
+        manual.Directory1 = command.Encode?.Directory1;
+        manual.Mode2 = command.Encode?.Mode2;
+        manual.ParentDirectoryName2 = command.Encode?.EncodeParentDirectoryName2;
+        manual.Directory2 = command.Encode?.Directory2;
+        manual.Mode3 = command.Encode?.Mode3;
+        manual.ParentDirectoryName3 = command.Encode?.EncodeParentDirectoryName3;
+        manual.Directory3 = command.Encode?.Directory3;
+
+        await context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task<ReserveStateEntity> GetOrCreateStateAsync(
+        EpgDbContext context,
+        string key,
+        CancellationToken cancellationToken)
+    {
+        ReserveStateEntity? state = await context.ReserveStates
+            .SingleOrDefaultAsync(item => item.Key == key, cancellationToken);
+        if (state is not null)
+        {
+            return state;
+        }
+
+        state = new ReserveStateEntity { Key = key, CreatedAt = timeProvider.GetUtcNow() };
+        context.ReserveStates.Add(state);
+        return state;
     }
 
     public async ValueTask<IReadOnlyList<ManualReserve>> ListManualReservesAsync(
@@ -186,15 +254,16 @@ public sealed class PostgresReserveRepository(
             Priority: item.Priority))];
     }
 
-    public async ValueTask<IReadOnlyDictionary<string, bool>> ListSkipStatesAsync(
-        CancellationToken cancellationToken)
+    public async ValueTask<ReserveStates> ListStatesAsync(CancellationToken cancellationToken)
     {
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        string[] keys = await context.ReserveSkips.AsNoTracking()
-            .Select(skip => skip.Key)
+        ReserveStateEntity[] states = await context.ReserveStates.AsNoTracking()
             .ToArrayAsync(cancellationToken);
 
-        return keys.ToDictionary(key => key, _ => true, StringComparer.Ordinal);
+        return new ReserveStates(
+            states.Where(state => state.IsSkip).Select(state => state.Key).ToHashSet(StringComparer.Ordinal),
+            states.Where(state => state.IsOverlapCleared).Select(state => state.Key)
+                .ToHashSet(StringComparer.Ordinal));
     }
 
     public async ValueTask ReplaceAsync(

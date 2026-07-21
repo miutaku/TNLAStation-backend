@@ -108,12 +108,18 @@ public sealed class ReserveEntity
 }
 
 /// <summary>
-/// 「この予約は録らない」という指定。予約の行ではなく鍵に紐づける。予約は番組表の更新で
-/// 作り直されるので、行に持たせると人の意思がそのたびに消える。
+/// 予約に対して人が示した意思。予約の行ではなく鍵に紐づける。予約は番組表の更新で
+/// 作り直されるので、行に持たせるとそのたびに消える。
 /// </summary>
-public sealed class ReserveSkipEntity
+public sealed class ReserveStateEntity
 {
     public string Key { get; set; } = string.Empty;
+
+    /// <summary>録らない。</summary>
+    public bool IsSkip { get; set; }
+
+    /// <summary>重複と判断されても録る。判断が外れることはあるので、人が覆せる。</summary>
+    public bool IsOverlapCleared { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 }

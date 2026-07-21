@@ -88,4 +88,14 @@ public sealed record ReserveGenerationInput(
     IReadOnlyList<ManualReserve> ManualReserves,
     IReadOnlyList<TunerDevice> Tuners,
     IReadOnlyList<RecordedHistoryItem> History,
-    IReadOnlyDictionary<string, bool>? SkipStates = null);
+    ReserveStates? States = null);
+
+/// <summary>
+/// 予約に対して人が示した意思。鍵で引く。予約は作り直されるので、予約の側には持てない。
+/// </summary>
+public sealed record ReserveStates(
+    IReadOnlySet<string> Skipped,
+    IReadOnlySet<string> OverlapCleared)
+{
+    public static ReserveStates Empty { get; } = new(new HashSet<string>(), new HashSet<string>());
+}

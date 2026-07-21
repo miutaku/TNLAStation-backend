@@ -16,7 +16,7 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<ReserveEntity> Reserves => Set<ReserveEntity>();
 
-    public DbSet<ReserveSkipEntity> ReserveSkips => Set<ReserveSkipEntity>();
+    public DbSet<ReserveStateEntity> ReserveStates => Set<ReserveStateEntity>();
 
     public DbSet<RecordedEntity> Recorded => Set<RecordedEntity>();
 
@@ -272,11 +272,13 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
                 .HasConstraintName("fk_reserves_manual_reserve");
         });
 
-        modelBuilder.Entity<ReserveSkipEntity>(entity =>
+        modelBuilder.Entity<ReserveStateEntity>(entity =>
         {
-            entity.ToTable("reserve_skips");
-            entity.HasKey(item => item.Key).HasName("pk_reserve_skips");
+            entity.ToTable("reserve_states");
+            entity.HasKey(item => item.Key).HasName("pk_reserve_states");
             entity.Property(item => item.Key).HasColumnName("key");
+            entity.Property(item => item.IsSkip).HasColumnName("is_skip").HasDefaultValue(false);
+            entity.Property(item => item.IsOverlapCleared).HasColumnName("is_overlap_cleared").HasDefaultValue(false);
             entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         });
 

@@ -36,11 +36,34 @@ public interface ILiveStreamService
     ValueTask StopAllAsync();
 
     /// <summary>
+    /// 変換しながら 1 本の流れとして配る。途中のファイルを作らないので遅れは小さいが、
+    /// 途中から見ることも巻き戻すこともできない。
+    /// </summary>
+    ValueTask<TranscodedOutput> OpenTranscodedLiveAsync(
+        long channelId,
+        string format,
+        int mode,
+        CancellationToken cancellationToken);
+
+    /// <inheritdoc cref="OpenTranscodedLiveAsync"/>
+    ValueTask<TranscodedOutput> OpenTranscodedRecordedAsync(
+        long videoFileId,
+        string format,
+        int mode,
+        double playPosition,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// 放送をそのまま流す。変換しないので画質も落ちず負荷もかからないが、再生できる機器は
     /// 限られる。呼び出し側が閉じるまでチューナーを占有する。
     /// </summary>
     ValueTask<Stream> OpenLiveStreamAsync(long channelId, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// 変換しながら配る 1 本。読み手が閉じたら変換も止まる。
+/// </summary>
+public sealed record TranscodedOutput(Stream Content, string ContentType);
 
 /// <summary>
 /// 指定したチャンネルが存在しない、チューナーが空いていない、といった視聴を始められない理由。

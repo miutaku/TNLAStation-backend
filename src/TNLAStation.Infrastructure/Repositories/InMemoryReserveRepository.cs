@@ -131,6 +131,52 @@ public sealed class InMemoryReserveRepository : IReserveRepository
         }
     }
 
+    public ValueTask<bool> ClearOverlapAsync(long reserveId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (gate)
+        {
+            int index = reserves.FindIndex(item => item.Id == reserveId);
+            if (index < 0)
+            {
+                return ValueTask.FromResult(false);
+            }
+
+            reserves[index] = reserves[index] with { IsOverlap = false };
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    public ValueTask<bool> UpdateAsync(
+        long reserveId,
+        CreateReserveCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (gate)
+        {
+            int index = reserves.FindIndex(item => item.Id == reserveId);
+            if (index < 0)
+            {
+                return ValueTask.FromResult(false);
+            }
+
+            reserves[index] = reserves[index] with
+            {
+                AllowEndLack = command.AllowEndLack,
+                Priority = command.Priority,
+                Tags = command.Tags,
+                ParentDirectoryName = command.Save?.ParentDirectoryName,
+                Directory = command.Save?.Directory,
+                RecordedFormat = command.Save?.RecordedFormat,
+            };
+            return ValueTask.FromResult(true);
+        }
+    }
+
     private static bool IsNormal(Reservation item) =>
         !item.IsConflict && !item.IsSkip && !item.IsOverlap;
 }

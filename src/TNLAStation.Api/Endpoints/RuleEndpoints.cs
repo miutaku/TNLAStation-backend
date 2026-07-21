@@ -24,6 +24,15 @@ internal static class RuleEndpoints
             .Accepts<AddRuleRequest>("application/json")
             .Produces<AddedRuleResponse>(StatusCodes.Status201Created);
 
+        // 上流は POST /rules/keyword にもルール追加を割り当てている。意図した設計には
+        // 見えないが、そこへ投げる利用側がいる以上、同じように受ける。
+        rules.MapPost("/keyword", AddRuleAsync)
+            .WithName("AddRuleByKeywordPath")
+            .WithSummary("ルール追加")
+            .WithTags("rules")
+            .Accepts<AddRuleRequest>("application/json")
+            .Produces<AddedRuleResponse>(StatusCodes.Status201Created);
+
         rules.MapGet("/keyword", SearchRuleKeywordsAsync)
             .WithName("SearchRuleKeywords")
             .WithSummary("ルールをキーワード検索")

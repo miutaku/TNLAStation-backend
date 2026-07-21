@@ -25,4 +25,19 @@ public sealed class UnavailableLiveStreamService : ILiveStreamService
 
     public ValueTask<Stream> OpenLiveStreamAsync(long channelId, CancellationToken cancellationToken) =>
         throw new LiveStreamException("MirakurunIsNotConfigured");
+
+    public ValueTask<TranscodedOutput> OpenTranscodedLiveAsync(
+        long channelId,
+        string format,
+        int mode,
+        CancellationToken cancellationToken) =>
+        throw new LiveStreamException("MirakurunIsNotConfigured");
+
+    public ValueTask<TranscodedOutput> OpenTranscodedRecordedAsync(
+        long videoFileId,
+        string format,
+        int mode,
+        double playPosition,
+        CancellationToken cancellationToken) =>
+        throw new LiveStreamException("MirakurunIsNotConfigured");
 }

@@ -84,3 +84,23 @@ public interface IVideoFileRepository
     /// </summary>
     ValueTask<bool> DeleteAsync(long videoFileId, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// 外で作った動画を録画へ結び付けるときの内容。
+/// </summary>
+public sealed record VideoFileUpload(
+    long RecordedId,
+    string Name,
+    string OriginalFileName,
+    string ParentDirectoryName,
+    string? SubDirectory,
+    string Type);
+
+public interface IVideoFileUploadRepository
+{
+    /// <summary>結び付ける録画が無ければ null。</summary>
+    ValueTask<long?> UploadAsync(
+        VideoFileUpload upload,
+        Stream content,
+        CancellationToken cancellationToken);
+}

@@ -33,6 +33,15 @@ public interface IReserveRepository
     /// 録る・録らないの指定。予約の行ではなく、作り直しても変わらない鍵に紐づけて残す。
     /// </summary>
     ValueTask<bool> SetSkipAsync(long reserveId, bool isSkip, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 重複と判断された予約を、それでも録る。判断が外れることはあるので人が覆せるようにし、
+    /// 覆した事実も鍵に紐づけて残す。残さないと次の生成でまた重複に戻る。
+    /// </summary>
+    ValueTask<bool> ClearOverlapAsync(long reserveId, CancellationToken cancellationToken);
+
+    /// <summary>手動予約の内容を差し替える。</summary>
+    ValueTask<bool> UpdateAsync(long reserveId, CreateReserveCommand command, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -50,7 +59,7 @@ public interface IReserveStore
 {
     ValueTask<IReadOnlyList<ManualReserve>> ListManualReservesAsync(CancellationToken cancellationToken);
 
-    ValueTask<IReadOnlyDictionary<string, bool>> ListSkipStatesAsync(CancellationToken cancellationToken);
+    ValueTask<ReserveStates> ListStatesAsync(CancellationToken cancellationToken);
 
     /// <summary>
     /// 生成した予約で丸ごと置き換える。番組表が変われば録るものも変わるので、差分ではなく

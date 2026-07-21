@@ -1,11 +1,15 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using TNLAStation.Application.Abstractions;
+using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Persistence;
 
 namespace TNLAStation.Infrastructure.Repositories;
 
-public sealed class PostgresVideoFileRepository(IDbContextFactory<EpgDbContext> contextFactory)
-    : IVideoFileRepository
+public sealed class PostgresVideoFileRepository(
+    IDbContextFactory<EpgDbContext> contextFactory,
+    IOptions<StorageOptions> storageOptions,
+    TimeProvider timeProvider) : IVideoFileRepository, IVideoFileUploadRepository
 {
     public async ValueTask<VideoFileLocation?> GetAsync(long videoFileId, CancellationToken cancellationToken)
     {
@@ -21,6 +25,71 @@ public sealed class PostgresVideoFileRepository(IDbContextFactory<EpgDbContext> 
                 file.Type,
                 file.Size))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    public async ValueTask<long?> UploadAsync(
+        VideoFileUpload upload,
+        Stream content,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(upload);
+
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        if (!await context.Recorded.AnyAsync(item => item.Id == upload.RecordedId, cancellationToken))
+        {
+            return null;
+        }
+
+        string? parent = ResolveDirectory(upload.ParentDirectoryName);
+        if (parent is null)
+        {
+            throw new InvalidOperationException("ParentDirectoryIsNotFound");
+        }
+
+        string directory = string.IsNullOrWhiteSpace(upload.SubDirectory)
+            ? parent
+            : Path.Combine(parent, upload.SubDirectory);
+        Directory.CreateDirectory(directory);
+
+        // 名前がぶつかると先にあったものを上書きしてしまう。
+        string filename = Path.GetFileName(upload.OriginalFileName);
+        string baseName = Path.GetFileNameWithoutExtension(filename);
+        string extension = Path.GetExtension(filename);
+        for (int suffix = 1; File.Exists(Path.Combine(directory, filename)); suffix++)
+        {
+            filename = $"{baseName}-{suffix}{extension}";
+        }
+
+        string path = Path.Combine(directory, filename);
+        await using (var destination = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            await content.CopyToAsync(destination, cancellationToken);
+        }
+
+        var entity = new VideoFileEntity
+        {
+            RecordedId = upload.RecordedId,
+            Name = upload.Name,
+            Filename = filename,
+            ParentDirectoryName = directory,
+            Type = upload.Type == "ts" ? "ts" : "encoded",
+            Size = new FileInfo(path).Length,
+            CreatedAt = timeProvider.GetUtcNow(),
+        };
+        context.VideoFiles.Add(entity);
+        await context.SaveChangesAsync(cancellationToken);
+        return entity.Id;
+    }
+
+    /// <summary>
+    /// 保存先は名前で指定される。任意のパスを受け取ると、設定した場所の外へ書ける。
+    /// </summary>
+    private string? ResolveDirectory(string name)
+    {
+        IReadOnlyList<RecordedDirectoryOptions> directories = storageOptions.Value.RecordedDirectories;
+        RecordedDirectoryOptions? match = directories.FirstOrDefault(
+            directory => string.Equals(directory.Name, name, StringComparison.Ordinal));
+        return match?.Path ?? (directories.Count > 0 && string.IsNullOrWhiteSpace(name) ? directories[0].Path : null);
     }
 
     public async ValueTask<bool> DeleteAsync(long videoFileId, CancellationToken cancellationToken)

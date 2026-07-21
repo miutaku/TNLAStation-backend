@@ -197,7 +197,7 @@ public sealed class ReserveGenerationPolicyTests
                 CreateProgram(2, name: "昼のニュース", channelId: 200),
             ],
             tuners: [new TunerDevice(0, ["GR"])],
-            skipStates: new Dictionary<string, bool> { ["rule:1:1"] = true });
+            states: new ReserveStates(new HashSet<string> { "rule:1:1" }, new HashSet<string>()));
 
         IReadOnlyList<ReserveAssignment> result = ReserveGenerationPolicy.Generate(input);
 
@@ -299,7 +299,7 @@ public sealed class ReserveGenerationPolicyTests
         IReadOnlyList<ManualReserve>? manualReserves = null,
         IReadOnlyList<TunerDevice>? tuners = null,
         IReadOnlyList<RecordedHistoryItem>? history = null,
-        IReadOnlyDictionary<string, bool>? skipStates = null) =>
+        ReserveStates? states = null) =>
         new(
             Now,
             rules ?? [],
@@ -307,7 +307,7 @@ public sealed class ReserveGenerationPolicyTests
             manualReserves ?? [],
             tuners ?? [new TunerDevice(0, ["GR"]), new TunerDevice(1, ["GR"])],
             history ?? [],
-            skipStates);
+            states);
 
     private static RecordingRule CreateRule(
         string keyword,

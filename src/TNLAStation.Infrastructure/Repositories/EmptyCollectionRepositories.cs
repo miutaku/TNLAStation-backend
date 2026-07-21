@@ -110,8 +110,17 @@ public sealed class UnavailableRecordedItemRepository : IRecordedItemRepository,
 /// <summary>
 /// 動画を保存する場所を持たない構成。ファイルは 1 つも無いので、どれを指しても見つからない。
 /// </summary>
-public sealed class EmptyVideoFileRepository : IVideoFileRepository
+public sealed class EmptyVideoFileRepository : IVideoFileRepository, IVideoFileUploadRepository
 {
+    public ValueTask<long?> UploadAsync(
+        VideoFileUpload upload,
+        Stream content,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<long?>(null);
+    }
+
     public ValueTask<VideoFileLocation?> GetAsync(long videoFileId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

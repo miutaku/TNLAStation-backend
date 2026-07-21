@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using TNLAStation.Application.Models;
 
 namespace TNLAStation.Api.Contracts;
 
@@ -160,3 +161,47 @@ public sealed class ReserveEncodeOptionRequest
 }
 
 public sealed record AddedReserveResponse(long ReserveId);
+
+/// <summary>
+/// 手動予約の差し替え。時刻と番組は変えない。変えたいならそれは別の予約であって、
+/// 同じ予約を書き換えるのとは意味が違う。
+/// </summary>
+public sealed class EditReserveRequest
+{
+    public bool AllowEndLack { get; init; }
+
+    public int Priority { get; init; }
+
+    public IReadOnlyList<long>? Tags { get; init; }
+
+    public ReserveSaveOptionRequest? SaveOption { get; init; }
+
+    public ReserveEncodeOptionRequest? EncodeOption { get; init; }
+
+    public CreateReserveCommand ToCommand() =>
+        new(
+            AllowEndLack,
+            ProgramId: null,
+            TimeSpecified: null,
+            Tags,
+            SaveOption is null
+                ? null
+                : new ReserveSaveSettings(
+                    SaveOption.ParentDirectoryName,
+                    SaveOption.Directory,
+                    SaveOption.RecordedFormat),
+            EncodeOption is null
+                ? null
+                : new ReserveEncodeSettings(
+                    EncodeOption.Mode1,
+                    EncodeOption.EncodeParentDirectoryName1,
+                    EncodeOption.Directory1,
+                    EncodeOption.Mode2,
+                    EncodeOption.EncodeParentDirectoryName2,
+                    EncodeOption.Directory2,
+                    EncodeOption.Mode3,
+                    EncodeOption.EncodeParentDirectoryName3,
+                    EncodeOption.Directory3,
+                    EncodeOption.IsDeleteOriginalAfterEncode),
+            Priority);
+}

@@ -35,6 +35,18 @@ internal static class ReserveEndpoints
             .WithTags("reserves")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
+        reserves.MapPut("/{reserveId:long}", UpdateReserveAsync)
+            .WithName("UpdateReserve")
+            .WithSummary("手動予約更新")
+            .WithTags("reserves")
+            .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
+
+        reserves.MapDelete("/{reserveId:long}/overlap", CancelOverlapAsync)
+            .WithName("CancelReserveOverlap")
+            .WithSummary("予約の重複状態を解除")
+            .WithTags("reserves")
+            .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
+
         reserves.MapDelete("/{reserveId:long}/skip", CancelSkipAsync)
             .WithName("CancelReserveSkip")
             .WithSummary("予約の除外状態を解除")
@@ -103,6 +115,29 @@ internal static class ReserveEndpoints
         CancellationToken cancellationToken)
     {
         return await repository.SetSkipAsync(reserveId, isSkip: false, cancellationToken)
+            ? Results.NoContent()
+            : NotFound();
+    }
+
+    private static async Task<IResult> CancelOverlapAsync(
+        long reserveId,
+        IReserveRepository repository,
+        CancellationToken cancellationToken)
+    {
+        return await repository.ClearOverlapAsync(reserveId, cancellationToken)
+            ? Results.NoContent()
+            : NotFound();
+    }
+
+    private static async Task<IResult> UpdateReserveAsync(
+        long reserveId,
+        EditReserveRequest request,
+        IReserveRepository repository,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await repository.UpdateAsync(reserveId, request.ToCommand(), cancellationToken)
             ? Results.NoContent()
             : NotFound();
     }

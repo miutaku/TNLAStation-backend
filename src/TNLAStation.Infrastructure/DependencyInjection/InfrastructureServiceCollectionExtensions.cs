@@ -91,7 +91,11 @@ public static class InfrastructureServiceCollectionExtensions
                 provider.GetRequiredService<UnavailableRecordedItemRepository>());
             services.AddSingleton<IRecordedTagWriteRepository>(provider =>
                 provider.GetRequiredService<UnavailableRecordedItemRepository>());
-            services.AddSingleton<IVideoFileRepository, EmptyVideoFileRepository>();
+            services.AddSingleton<EmptyVideoFileRepository>();
+            services.AddSingleton<IVideoFileRepository>(provider =>
+                provider.GetRequiredService<EmptyVideoFileRepository>());
+            services.AddSingleton<IVideoFileUploadRepository>(provider =>
+                provider.GetRequiredService<EmptyVideoFileRepository>());
             services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
             services.AddSingleton<IEncodeTaskList, UnavailableEncodeTaskList>();
             services.AddSingleton<IThumbnailService, UnavailableThumbnailService>();
@@ -111,7 +115,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IRecordedTagWriteRepository>(provider =>
             provider.GetRequiredService<PostgresRecordedRepository>());
         services.AddSingleton<IRecordingStore, PostgresRecordingStore>();
-        services.AddSingleton<IVideoFileRepository, PostgresVideoFileRepository>();
+        services.AddSingleton<PostgresVideoFileRepository>();
+        services.AddSingleton<IVideoFileRepository>(provider =>
+            provider.GetRequiredService<PostgresVideoFileRepository>());
+        services.AddSingleton<IVideoFileUploadRepository>(provider =>
+            provider.GetRequiredService<PostgresVideoFileRepository>());
         services.AddSingleton<PostgresEncodeTaskList>();
         services.AddSingleton<IEncodeTaskList>(provider => provider.GetRequiredService<PostgresEncodeTaskList>());
         services.AddSingleton<IEncodeQueueRepository>(provider =>

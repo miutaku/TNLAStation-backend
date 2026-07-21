@@ -41,7 +41,7 @@ public sealed partial class ReserveGenerator(
                 await store.ListManualReservesAsync(cancellationToken),
                 await LoadTunersAsync(cancellationToken),
                 await LoadHistoryAsync(cancellationToken),
-                await store.ListSkipStatesAsync(cancellationToken));
+                await store.ListStatesAsync(cancellationToken));
 
             IReadOnlyList<ReserveAssignment> assignments = ReserveGenerationPolicy.Generate(input);
             await store.ReplaceAsync(assignments, now, cancellationToken);

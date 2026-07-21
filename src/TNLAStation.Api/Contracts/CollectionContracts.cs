@@ -92,3 +92,5 @@ public sealed class AddEncodeRequest
 public sealed record AddedThumbnailResponse(long ThumbnailId);
 
 public sealed record RecordedCleanupResponse(int Removed);
+
+public sealed record UploadedVideoFileResponse(long VideoFileId);

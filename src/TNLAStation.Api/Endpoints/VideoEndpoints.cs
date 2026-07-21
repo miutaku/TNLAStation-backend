@@ -31,6 +31,12 @@ internal static class VideoEndpoints
             .WithSummary("ビデオプレイリスト")
             .WithTags("videos");
 
+        videos.MapPost("/upload", UploadAsync)
+            .WithName("UploadVideoFile")
+            .WithSummary("ビデオファイルのアップロード")
+            .WithTags("videos")
+            .DisableAntiforgery();
+
         videos.MapDelete("/{videoFileId:long}", DeleteVideoAsync)
             .WithName("DeleteVideoFile")
             .WithSummary("ビデオファイル削除")
@@ -105,6 +111,51 @@ internal static class VideoEndpoints
             string.Empty);
 
         return Results.Text(playlist, "application/x-mpegURL");
+    }
+
+    /// <summary>
+    /// 外で作った動画を録画へ結び付ける。中身は検査しない。再生できるかどうかは、
+    /// 実際に再生するときに分かる。
+    /// </summary>
+    private static async Task<IResult> UploadAsync(
+        HttpRequest request,
+        IVideoFileUploadRepository repository,
+        CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+        {
+            return Results.BadRequest(new ValidationErrorResponse("multipart/form-data is required"));
+        }
+
+        IFormCollection form = await request.ReadFormAsync(cancellationToken);
+        IFormFile? file = form.Files["file"];
+        if (file is null || !long.TryParse(form["recordedId"], CultureInfo.InvariantCulture, out long recordedId))
+        {
+            return Results.BadRequest(new ValidationErrorResponse("recordedId and file are required"));
+        }
+
+        string parentDirectoryName = form["parentDirectoryName"].ToString();
+        string viewName = form["viewName"].ToString();
+        string fileType = form["fileType"].ToString();
+        string? subDirectory = form["subDirectory"].ToString() is { Length: > 0 } value ? value : null;
+
+        await using Stream content = file.OpenReadStream();
+        long? id = await repository.UploadAsync(
+            new VideoFileUpload(
+                recordedId,
+                string.IsNullOrWhiteSpace(viewName) ? Path.GetFileNameWithoutExtension(file.FileName) : viewName,
+                file.FileName,
+                parentDirectoryName,
+                subDirectory,
+                string.IsNullOrWhiteSpace(fileType) ? "encoded" : fileType),
+            content,
+            cancellationToken);
+
+        return id is null
+            ? Results.Json(
+                new ErrorResponse(StatusCodes.Status404NotFound, "recorded is not found"),
+                statusCode: StatusCodes.Status404NotFound)
+            : Results.Created($"/api/videos/{id}", new UploadedVideoFileResponse(id.Value));
     }
 
     private static async Task<IResult> DeleteVideoAsync(

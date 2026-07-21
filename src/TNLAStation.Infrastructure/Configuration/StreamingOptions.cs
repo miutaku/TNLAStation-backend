@@ -29,6 +29,12 @@ public sealed class StreamingOptions
     public int MaxConcurrentStreams { get; init; } = 2;
 
     public IReadOnlyList<LiveStreamModeOptions> LiveModes { get; init; } = [];
+
+    /// <summary>
+    /// HLS 以外の出力。名前が URL の末尾になる。中身は設定で丸ごと差し替えられる。
+    /// 機器ごとに再生できる形が違うので、こちらで決め打つ話ではない。
+    /// </summary>
+    public IReadOnlyList<StreamFormatOptions> Formats { get; init; } = [];
 }
 
 /// <summary>
@@ -43,4 +49,13 @@ public sealed class LiveStreamModeOptions
     public string VideoBitrate { get; init; } = string.Empty;
 
     public string AudioBitrate { get; init; } = string.Empty;
+}
+
+public sealed class StreamFormatOptions
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string ContentType { get; init; } = "video/mp4";
+
+    public IReadOnlyList<string> Arguments { get; init; } = [];
 }
