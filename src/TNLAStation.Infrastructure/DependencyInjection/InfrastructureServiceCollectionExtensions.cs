@@ -7,6 +7,7 @@ using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Mirakurun;
 using TNLAStation.Infrastructure.Persistence;
 using TNLAStation.Infrastructure.Repositories;
+using TNLAStation.Infrastructure.Encoding;
 using TNLAStation.Infrastructure.Recording;
 using TNLAStation.Infrastructure.Reserves;
 using TNLAStation.Infrastructure.Streaming;
@@ -36,11 +37,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<StreamingOptions>(configuration.GetSection(StreamingOptions.SectionName));
         services.Configure<ReserveOptions>(configuration.GetSection(ReserveOptions.SectionName));
         services.Configure<RecordingOptions>(configuration.GetSection(RecordingOptions.SectionName));
+        services.Configure<EncodeOptions>(configuration.GetSection(EncodeOptions.SectionName));
 
         services.AddSingleton<IConfigRepository, MockConfigRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
-        services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
+        services.AddSingleton<IMediaProbe, FfprobeMediaProbe>();
 
         AddEpgStore(services, configuration.GetConnectionString(PostgresConnectionName));
         AddRuleStore(services, configuration.GetConnectionString(PostgresConnectionName));
@@ -88,6 +90,9 @@ public static class InfrastructureServiceCollectionExtensions
                 provider.GetRequiredService<UnavailableRecordedItemRepository>());
             services.AddSingleton<IRecordedTagWriteRepository>(provider =>
                 provider.GetRequiredService<UnavailableRecordedItemRepository>());
+            services.AddSingleton<IVideoFileRepository, EmptyVideoFileRepository>();
+            services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
+            services.AddSingleton<IEncodeTaskList, UnavailableEncodeTaskList>();
             return;
         }
 
@@ -104,6 +109,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IRecordedTagWriteRepository>(provider =>
             provider.GetRequiredService<PostgresRecordedRepository>());
         services.AddSingleton<IRecordingStore, PostgresRecordingStore>();
+        services.AddSingleton<IVideoFileRepository, PostgresVideoFileRepository>();
+        services.AddSingleton<PostgresEncodeTaskList>();
+        services.AddSingleton<IEncodeTaskList>(provider => provider.GetRequiredService<PostgresEncodeTaskList>());
+        services.AddSingleton<IEncodeQueueRepository>(provider =>
+            provider.GetRequiredService<PostgresEncodeTaskList>());
+        services.AddHostedService<EncodeWorker>();
         services.AddSingleton<PostgresReserveRepository>();
         services.AddSingleton<IReserveRepository>(provider =>
             provider.GetRequiredService<PostgresReserveRepository>());
@@ -149,9 +160,9 @@ public static class InfrastructureServiceCollectionExtensions
             provider.GetRequiredService<ReserveGenerator>());
         services.AddHostedService<ReserveGenerationHostedService>();
 
-        services.AddSingleton<LiveStreamManager>();
-        services.AddSingleton<ILiveStreamService>(provider => provider.GetRequiredService<LiveStreamManager>());
-        services.AddSingleton<IStreamRepository>(provider => provider.GetRequiredService<LiveStreamManager>());
+        services.AddSingleton<HlsStreamManager>();
+        services.AddSingleton<ILiveStreamService>(provider => provider.GetRequiredService<HlsStreamManager>());
+        services.AddSingleton<IStreamRepository>(provider => provider.GetRequiredService<HlsStreamManager>());
     }
 
     private static Uri GetBaseAddress(MirakurunOptions options)

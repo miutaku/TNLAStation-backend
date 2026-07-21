@@ -57,6 +57,7 @@ app.MapRuleEndpoints();
 app.MapCollectionEndpoints();
 app.MapReserveEndpoints();
 app.MapRecordedEndpoints();
+app.MapVideoEndpoints();
 app.MapStreamEndpoints();
 
 app.Run();

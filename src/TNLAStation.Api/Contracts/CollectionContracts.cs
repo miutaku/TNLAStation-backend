@@ -66,3 +66,25 @@ public sealed class RelateRecordedTagRequest
 {
     public long RecordedId { get; init; }
 }
+
+public sealed record VideoDurationResponse(double Duration);
+
+public sealed record AddedEncodeResponse(long EncodeId);
+
+public sealed class AddEncodeRequest
+{
+    public long RecordedId { get; init; }
+
+    public long SourceVideoFileId { get; init; }
+
+    public string Mode { get; init; } = string.Empty;
+
+    public bool RemoveOriginal { get; init; }
+
+    /// <summary>保存先。isSaveSameDirectory が真なら見ない。</summary>
+    public string? ParentDir { get; init; }
+
+    public string? Directory { get; init; }
+
+    public bool? IsSaveSameDirectory { get; init; }
+}

@@ -41,6 +41,22 @@ internal static class CollectionEndpoints
             .WithTags("encode")
             .Produces<EncodeInfoResponse>();
 
+        api.MapPost("/encode", AddEncodeAsync)
+            .WithName("AddEncode")
+            .WithSummary("エンコード追加")
+            .WithTags("encode")
+            .Produces<AddedEncodeResponse>(StatusCodes.Status201Created);
+
+        api.MapDelete("/encode/{encodeId:long}", CancelEncodeAsync)
+            .WithName("CancelEncode")
+            .WithSummary("エンコード取り消し")
+            .WithTags("encode");
+
+        api.MapDelete("/recorded/{recordedId:long}/encode", CancelRecordedEncodeAsync)
+            .WithName("CancelRecordedEncode")
+            .WithSummary("録画に紐づくエンコードを取り消す")
+            .WithTags("encode");
+
         api.MapGet("/streams", GetStreamsAsync)
             .WithName("GetStreams")
             .WithSummary("ストリーム情報取得")
@@ -135,6 +151,46 @@ internal static class CollectionEndpoints
         return Results.Ok(new EncodeInfoResponse(
             queue.Running.Select(item => item.ToResponse(isHalfWidth)).ToArray(),
             queue.Waiting.Select(item => item.ToResponse(isHalfWidth)).ToArray()));
+    }
+
+    private static async Task<IResult> AddEncodeAsync(
+        AddEncodeRequest request,
+        IEncodeTaskList queue,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        long encodeId = await queue.EnqueueAsync(
+            new EncodeRequest(
+                request.RecordedId,
+                request.SourceVideoFileId,
+                request.Mode,
+                request.RemoveOriginal,
+                request.ParentDir,
+                request.Directory,
+                request.IsSaveSameDirectory ?? false),
+            cancellationToken);
+
+        return Results.Created($"/api/encode/{encodeId}", new AddedEncodeResponse(encodeId));
+    }
+
+    private static async Task<IResult> CancelEncodeAsync(
+        long encodeId,
+        IEncodeTaskList queue,
+        CancellationToken cancellationToken)
+    {
+        // 既に終わったものを取り消すのは失敗ではない。押した時点で走り終えることがある。
+        await queue.CancelAsync(encodeId, cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> CancelRecordedEncodeAsync(
+        long recordedId,
+        IEncodeTaskList queue,
+        CancellationToken cancellationToken)
+    {
+        await queue.CancelForRecordedAsync(recordedId, cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> GetStreamsAsync(

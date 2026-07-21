@@ -6,6 +6,8 @@ public sealed class StreamingOptions
 
     public string FfmpegPath { get; init; } = "ffmpeg";
 
+    public string FfprobePath { get; init; } = "ffprobe";
+
     /// <summary>
     /// セグメントとプレイリストの置き場。再生が終われば消える一時ファイルなので、
     /// 録画の保存先とは分ける。

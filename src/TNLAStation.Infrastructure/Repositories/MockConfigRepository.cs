@@ -1,15 +1,29 @@
+using Microsoft.Extensions.Options;
 using TNLAStation.Application.Abstractions;
+using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Domain;
 
 namespace TNLAStation.Infrastructure.Repositories;
 
-public sealed class MockConfigRepository : IConfigRepository
+/// <summary>
+/// 画面へ渡す設定。保存先と変換の設定は実際の設定から作る。画面はここに並んだ選択肢しか
+/// 出さないので、実体と食い違うと、選べるのに実行できない組み合わせが生まれる。
+/// </summary>
+public sealed class MockConfigRepository(
+    IOptions<StorageOptions> storageOptions,
+    IOptions<EncodeOptions> encodeOptions) : IConfigRepository
 {
-    private static readonly StationConfiguration Configuration = new(
+    private static readonly string[] DefaultEncodeModes = ["H.264"];
+
+    private StationConfiguration Configuration => new(
         SocketIoPort: 8888,
         Broadcast: new BroadcastAvailability(Gr: true, Bs: true, Cs: true, Sky: false),
-        RecordedDirectories: ["recorded"],
-        EncodeModes: ["H.264"],
+        RecordedDirectories: storageOptions.Value.RecordedDirectories.Count > 0
+            ? [.. storageOptions.Value.RecordedDirectories.Select(directory => directory.Name)]
+            : ["recorded"],
+        EncodeModes: encodeOptions.Value.Modes.Count > 0
+            ? [.. encodeOptions.Value.Modes.Select(mode => mode.Name)]
+            : DefaultEncodeModes,
         UrlScheme: new UrlSchemeConfiguration(
             M2Ts: new UrlSchemeInfo(
                 Ios: "vlc-x-callback://x-callback-url/stream?url=PROTOCOL%3A%2F%2FADDRESS",
@@ -20,8 +34,8 @@ public sealed class MockConfigRepository : IConfigRepository
             Download: new UrlSchemeInfo(
                 Ios: "vlc-x-callback://x-callback-url/download?url=PROTOCOL%3A%2F%2FADDRESS&filename=FILENAME")),
         IsEnableTsLiveStream: false,
-        IsEnableTsRecordedStream: false,
-        IsEnableEncodedRecordedStream: false);
+        IsEnableTsRecordedStream: true,
+        IsEnableEncodedRecordedStream: true);
 
     public ValueTask<StationConfiguration> GetAsync(CancellationToken cancellationToken)
     {

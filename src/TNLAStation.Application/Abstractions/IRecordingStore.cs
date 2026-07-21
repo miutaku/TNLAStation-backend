@@ -58,3 +58,29 @@ public interface IRecordingStore
 
     ValueTask<IReadOnlyList<UnfinishedRecording>> ListUnfinishedAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// 保存された動画ファイル 1 つ。保存先と、その中での相対パスに分けて持つ。保存先ごと
+/// 移せるように、絶対パスでは持たない。
+/// </summary>
+public sealed record VideoFileLocation(
+    long Id,
+    long RecordedId,
+    string Name,
+    string ParentDirectoryName,
+    string Filename,
+    string Type,
+    long Size)
+{
+    public string FullPath => Path.Combine(ParentDirectoryName, Filename);
+}
+
+public interface IVideoFileRepository
+{
+    ValueTask<VideoFileLocation?> GetAsync(long videoFileId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// ファイルを消す。録画に他のファイルが残っていれば録画そのものは残す。
+    /// </summary>
+    ValueTask<bool> DeleteAsync(long videoFileId, CancellationToken cancellationToken);
+}

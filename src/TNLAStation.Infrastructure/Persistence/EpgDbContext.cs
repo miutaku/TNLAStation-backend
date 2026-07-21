@@ -26,6 +26,8 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<RecordedTagLinkEntity> RecordedTagLinks => Set<RecordedTagLinkEntity>();
 
+    public DbSet<EncodeTaskEntity> EncodeTasks => Set<EncodeTaskEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -361,6 +363,25 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
                 .HasForeignKey(item => item.TagId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_recorded_tag_links_tag");
+        });
+
+        modelBuilder.Entity<EncodeTaskEntity>(entity =>
+        {
+            entity.ToTable("encode_tasks", table =>
+                table.HasCheckConstraint("ck_encode_tasks_status", "status IN ('waiting', 'running')"));
+            entity.HasKey(item => item.Id).HasName("pk_encode_tasks");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.RecordedId).HasColumnName("recorded_id");
+            entity.Property(item => item.SourceVideoFileId).HasColumnName("source_video_file_id");
+            entity.Property(item => item.Mode).HasColumnName("mode");
+            entity.Property(item => item.ParentDirectoryName).HasColumnName("parent_directory_name");
+            entity.Property(item => item.Directory).HasColumnName("directory");
+            entity.Property(item => item.RemoveOriginal).HasColumnName("remove_original");
+            entity.Property(item => item.Status).HasColumnName("status");
+            entity.Property(item => item.Percent).HasColumnName("percent");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => item.RecordedId).HasDatabaseName("ix_encode_tasks_recorded");
+            entity.HasIndex(item => new { item.Status, item.Id }).HasDatabaseName("ix_encode_tasks_queue");
         });
 
         modelBuilder.Entity<EpgSyncStateEntity>(entity =>

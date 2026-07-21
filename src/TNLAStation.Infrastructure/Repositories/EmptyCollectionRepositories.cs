@@ -100,3 +100,48 @@ public sealed class UnavailableRecordedItemRepository : IRecordedItemRepository,
         return ValueTask.FromResult(false);
     }
 }
+
+/// <summary>
+/// 動画を保存する場所を持たない構成。ファイルは 1 つも無いので、どれを指しても見つからない。
+/// </summary>
+public sealed class EmptyVideoFileRepository : IVideoFileRepository
+{
+    public ValueTask<VideoFileLocation?> GetAsync(long videoFileId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<VideoFileLocation?>(null);
+    }
+
+    public ValueTask<bool> DeleteAsync(long videoFileId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(false);
+    }
+}
+
+/// <summary>
+/// 録画を保存する場所を持たない構成。変換する元が無いので、頼まれても受けられない。
+/// </summary>
+public sealed class UnavailableEncodeTaskList : IEncodeTaskList
+{
+    public ValueTask<long> EnqueueAsync(EncodeRequest request, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("RecordedStoreIsNotConfigured");
+
+    public ValueTask<IReadOnlyList<EncodeTask>> ListAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<IReadOnlyList<EncodeTask>>([]);
+    }
+
+    public ValueTask<bool> CancelAsync(long encodeId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(false);
+    }
+
+    public ValueTask<int> CancelForRecordedAsync(long recordedId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(0);
+    }
+}

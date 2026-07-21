@@ -6,17 +6,20 @@ using TNLAStation.Infrastructure.Configuration;
 namespace TNLAStation.Infrastructure.Streaming;
 
 /// <summary>
-/// 1 本のライブ配信。Mirakurun からの受信、ffmpeg、書き出したファイルが一組で寿命を共にする。
-/// どれか 1 つでも残すとチューナーかディスクが解放されない。
+/// HLS 配信 1 本。受信元、ffmpeg、書き出したファイルが一組で寿命を共にする。どれか 1 つ
+/// でも残すとチューナーかディスクが解放されない。
+///
+/// 受信元は 2 通りある。ライブはチューナーの流れを ffmpeg へ流し込むので <c>source</c> を
+/// 持つ。録画済みは ffmpeg にファイルを直接読ませる。流し込むと頭出しができない。
 /// </summary>
-internal sealed partial class LiveStreamSession(
+internal sealed partial class HlsStreamSession(
     long streamId,
     long channelId,
     string channelName,
     int mode,
     DateTimeOffset startedAt,
     StreamingOptions options,
-    Stream source,
+    Stream? source,
     string[] arguments,
     ILogger logger) : IAsyncDisposable
 {
@@ -38,6 +41,9 @@ internal sealed partial class LiveStreamSession(
 
     public DateTimeOffset LastKeepAt { get; set; } = startedAt;
 
+    /// <summary>録画済みの再生なら、その動画ファイル。ライブなら null。</summary>
+    public long? VideoFileId { get; init; }
+
     public bool IsRunning => ffmpeg is { HasExited: false };
 
     private string PlaylistPath => Path.Combine(options.WorkDirectory, $"stream{streamId}.m3u8");
@@ -46,7 +52,7 @@ internal sealed partial class LiveStreamSession(
     {
         var startInfo = new ProcessStartInfo(options.FfmpegPath)
         {
-            RedirectStandardInput = true,
+            RedirectStandardInput = source is not null,
             RedirectStandardError = true,
             RedirectStandardOutput = false,
             UseShellExecute = false,
@@ -60,7 +66,7 @@ internal sealed partial class LiveStreamSession(
             ?? throw new LiveStreamException("StreamProcessStartFailed");
         ffmpeg.ErrorDataReceived += OnErrorDataReceived;
         ffmpeg.BeginErrorReadLine();
-        pump = Task.Run(PumpAsync, CancellationToken.None);
+        pump = source is null ? null : Task.Run(PumpAsync, CancellationToken.None);
     }
 
     /// <summary>
@@ -112,7 +118,11 @@ internal sealed partial class LiveStreamSession(
             }
         }
 
-        await source.DisposeAsync();
+        if (source is not null)
+        {
+            await source.DisposeAsync();
+        }
+
         lifetime.Dispose();
         DeleteStreamFiles();
     }
@@ -121,7 +131,7 @@ internal sealed partial class LiveStreamSession(
     {
         try
         {
-            await source.CopyToAsync(ffmpeg!.StandardInput.BaseStream, lifetime.Token);
+            await source!.CopyToAsync(ffmpeg!.StandardInput.BaseStream, lifetime.Token);
         }
         catch (OperationCanceledException)
         {

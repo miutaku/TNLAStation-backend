@@ -10,7 +10,19 @@ public sealed class UnavailableLiveStreamService : ILiveStreamService
     public ValueTask<long> StartHlsAsync(long channelId, int mode, CancellationToken cancellationToken) =>
         throw new LiveStreamException("MirakurunIsNotConfigured");
 
+    public ValueTask<long> StartRecordedHlsAsync(
+        long videoFileId,
+        double playPosition,
+        int mode,
+        CancellationToken cancellationToken) =>
+        throw new LiveStreamException("MirakurunIsNotConfigured");
+
     public bool Keep(long streamId) => false;
 
     public ValueTask<bool> StopAsync(long streamId) => ValueTask.FromResult(false);
+
+    public ValueTask StopAllAsync() => ValueTask.CompletedTask;
+
+    public ValueTask<Stream> OpenLiveStreamAsync(long channelId, CancellationToken cancellationToken) =>
+        throw new LiveStreamException("MirakurunIsNotConfigured");
 }
