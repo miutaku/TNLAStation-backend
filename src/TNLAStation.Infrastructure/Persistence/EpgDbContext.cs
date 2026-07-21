@@ -133,6 +133,7 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
             entity.Property(item => item.UpdateCount).HasColumnName("update_cnt").HasDefaultValue(0L);
             entity.Property(item => item.IsTimeSpecification).HasColumnName("is_time_specification");
+            entity.Property(item => item.Priority).HasColumnName("priority").HasDefaultValue(0);
             entity.Property(item => item.Keyword).HasColumnName("keyword");
             entity.Property(item => item.HalfWidthKeyword).HasColumnName("half_width_keyword");
             entity.Property(item => item.IgnoreKeyword).HasColumnName("ignore_keyword");
@@ -201,6 +202,7 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.Property(item => item.Name).HasColumnName("name");
             entity.Property(item => item.HalfWidthName).HasColumnName("half_width_name");
             entity.Property(item => item.AllowEndLack).HasColumnName("allow_end_lack").HasDefaultValue(true);
+            entity.Property(item => item.Priority).HasColumnName("priority").HasDefaultValue(0);
             entity.Property(item => item.IsDeleteOriginalAfterEncode)
                 .HasColumnName("is_delete_original_after_encode");
             entity.Property(item => item.TagsJson).HasColumnName("tags").HasColumnType("json");
@@ -242,6 +244,7 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.Property(item => item.EndAt).HasColumnName("end_at").HasColumnType("timestamp with time zone");
             entity.Property(item => item.Name).HasColumnName("name");
             entity.Property(item => item.HalfWidthName).HasColumnName("half_width_name");
+            entity.Property(item => item.Priority).HasColumnName("priority").HasDefaultValue(0);
             entity.Property(item => item.IsSkip).HasColumnName("is_skip");
             entity.Property(item => item.IsConflict).HasColumnName("is_conflict");
             entity.Property(item => item.IsOverlap).HasColumnName("is_overlap");

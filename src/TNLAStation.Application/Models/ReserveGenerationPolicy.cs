@@ -34,7 +34,8 @@ public static class ReserveGenerationPolicy
                 reserve.Name,
                 reserve.ProgramId,
                 ManualReserveId: reserve.Id,
-                IsSkip: reserve.IsSkip));
+                IsSkip: reserve.IsSkip,
+                Priority: reserve.Priority));
         }
 
         // 手動で入れた番組はルールの対象から外す。同じ番組に 2 つ予約が立つと、
@@ -70,7 +71,10 @@ public static class ReserveGenerationPolicy
         var occupied = new Dictionary<int, List<ReserveTarget>>();
         var result = new List<ReserveAssignment>(targets.Count);
 
-        foreach (ReserveTarget target in targets.OrderBy(Priority).ThenBy(target => target.StartAt)
+        foreach (ReserveTarget target in targets
+            .OrderByDescending(target => target.Priority)
+            .ThenBy(SourceOrder)
+            .ThenBy(target => target.StartAt)
             .ThenByDescending(target => target.EndAt - target.StartAt)
             .ThenBy(target => target.ChannelId))
         {
@@ -126,7 +130,8 @@ public static class ReserveGenerationPolicy
                 program.Name,
                 program.Id,
                 RuleId: rule.Id,
-                IsOverlap: isOverlap);
+                IsOverlap: isOverlap,
+                Priority: rule.ReserveOption.Priority);
         }
     }
 
@@ -176,7 +181,9 @@ public static class ReserveGenerationPolicy
         left.StartAt < right.EndAt && right.StartAt < left.EndAt;
 
     /// <summary>
-    /// 人が入れた予約を先に置く。チューナーが足りないとき、後から来たルールに押し出されない。
+    /// 優先度が同じなら、人が入れた予約を先に置く。チューナーが足りないとき、後から来た
+    /// ルールに押し出されない。優先度そのものは source より先に効く。ルールを上げたのに
+    /// 手動が勝ってしまうと、上げた意味がない。
     /// </summary>
-    private static int Priority(ReserveTarget target) => target.Source == ReserveSource.Rule ? 1 : 0;
+    private static int SourceOrder(ReserveTarget target) => target.Source == ReserveSource.Rule ? 1 : 0;
 }

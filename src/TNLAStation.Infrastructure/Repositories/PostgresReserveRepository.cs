@@ -63,6 +63,7 @@ public sealed class PostgresReserveRepository(
             ProgramId = command.ProgramId,
             IsTimeSpecified = command.TimeSpecified is not null,
             AllowEndLack = command.AllowEndLack,
+            Priority = command.Priority,
             IsDeleteOriginalAfterEncode = command.Encode?.IsDeleteOriginalAfterEncode ?? false,
             TagsJson = command.Tags is { Count: > 0 } ? JsonSerializer.Serialize(command.Tags, JsonOptions) : null,
             ParentDirectoryName = command.Save?.ParentDirectoryName,
@@ -181,7 +182,8 @@ public sealed class PostgresReserveRepository(
             item.EndAt,
             item.Name,
             item.ProgramId,
-            item.IsTimeSpecified))];
+            item.IsTimeSpecified,
+            Priority: item.Priority))];
     }
 
     public async ValueTask<IReadOnlyDictionary<string, bool>> ListSkipStatesAsync(
@@ -219,6 +221,7 @@ public sealed class PostgresReserveRepository(
             EndAt = assignment.Target.EndAt,
             Name = assignment.Target.Name,
             HalfWidthName = assignment.Target.Name,
+            Priority = assignment.Target.Priority,
             IsSkip = assignment.Target.IsSkip,
             IsConflict = assignment.IsConflict,
             IsOverlap = assignment.Target.IsOverlap,

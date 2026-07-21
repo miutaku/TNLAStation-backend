@@ -79,6 +79,7 @@ public sealed record Reservation(
     string Name,
     string HalfWidthName,
     long? RuleId = null,
+    int Priority = 0,
     IReadOnlyList<long>? Tags = null,
     string? ParentDirectoryName = null,
     string? Directory = null,

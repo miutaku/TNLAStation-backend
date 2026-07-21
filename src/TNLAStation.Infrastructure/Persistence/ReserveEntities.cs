@@ -26,6 +26,9 @@ public sealed class ManualReserveEntity
 
     public bool AllowEndLack { get; set; }
 
+    /// <summary>チューナーが足りないときに、どれを先に取るか。大きいほうが先。</summary>
+    public int Priority { get; set; }
+
     public bool IsDeleteOriginalAfterEncode { get; set; }
 
     public string? TagsJson { get; set; }
@@ -87,6 +90,8 @@ public sealed class ReserveEntity
     public string Name { get; set; } = string.Empty;
 
     public string HalfWidthName { get; set; } = string.Empty;
+
+    public int Priority { get; set; }
 
     public bool IsSkip { get; set; }
 

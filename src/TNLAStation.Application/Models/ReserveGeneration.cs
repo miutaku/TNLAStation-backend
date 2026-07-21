@@ -35,7 +35,8 @@ public sealed record ManualReserve(
     string Name,
     long? ProgramId = null,
     bool IsTimeSpecified = false,
-    bool IsSkip = false);
+    bool IsSkip = false,
+    int Priority = ReservePriority.Normal);
 
 /// <summary>
 /// 重複判定に使う録画済みの履歴。ルールが同じ番組を録り直さないための材料。
@@ -56,7 +57,8 @@ public sealed record ReserveTarget(
     long? RuleId = null,
     long? ManualReserveId = null,
     bool IsSkip = false,
-    bool IsOverlap = false)
+    bool IsOverlap = false,
+    int Priority = ReservePriority.Normal)
 {
     /// <summary>
     /// 生成をやり直しても変わらない鍵。skip の指定は予約そのものではなくこの鍵に紐づくので、

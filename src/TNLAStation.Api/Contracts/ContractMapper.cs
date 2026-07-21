@@ -90,6 +90,7 @@ internal static class ContractMapper
             Name: isHalfWidth ? item.HalfWidthName : item.Name)
         {
             RuleId = item.RuleId,
+            Priority = item.Priority,
             Tags = item.Tags,
             ParentDirectoryName = item.ParentDirectoryName,
             Directory = item.Directory,

@@ -13,6 +13,9 @@ public sealed class RuleEntity
 
     public bool IsTimeSpecification { get; set; }
 
+    /// <summary>チューナーが足りないときに、どれを先に取るか。大きいほうが先。</summary>
+    public int Priority { get; set; }
+
     public string? Keyword { get; set; }
 
     public string? HalfWidthKeyword { get; set; }

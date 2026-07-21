@@ -41,7 +41,8 @@ internal static class RuleEntityMapper
                 entity.AllowEndLack,
                 entity.AvoidDuplicate,
                 entity.PeriodToAvoidDuplicate,
-                Deserialize<long>(entity.TagsJson)),
+                Deserialize<long>(entity.TagsJson),
+                entity.Priority),
             ToSaveSettings(entity),
             ToEncodeSettings(entity),
             entity.UpdateCount);
@@ -82,6 +83,7 @@ internal static class RuleEntityMapper
         entity.AvoidDuplicate = reserve.AvoidDuplicate;
         entity.PeriodToAvoidDuplicate = reserve.PeriodToAvoidDuplicate;
         entity.TagsJson = Serialize(reserve.Tags);
+        entity.Priority = reserve.Priority;
 
         entity.ParentDirectoryName = rule.SaveOption?.ParentDirectoryName;
         entity.Directory = rule.SaveOption?.Directory;

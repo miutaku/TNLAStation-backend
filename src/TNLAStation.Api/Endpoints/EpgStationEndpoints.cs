@@ -210,7 +210,8 @@ internal static class EpgStationEndpoints
                     request.EncodeOption.Mode3,
                     request.EncodeOption.EncodeParentDirectoryName3,
                     request.EncodeOption.Directory3,
-                    request.EncodeOption.IsDeleteOriginalAfterEncode));
+                    request.EncodeOption.IsDeleteOriginalAfterEncode),
+            request.Priority);
         long id = await repository.AddAsync(command, cancellationToken);
 
         return Results.Json(

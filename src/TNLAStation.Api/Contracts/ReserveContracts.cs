@@ -35,6 +35,8 @@ public sealed record ReserveItemResponse(
 {
     public long? RuleId { get; init; }
 
+    public int Priority { get; init; }
+
     public IReadOnlyList<long>? Tags { get; init; }
 
     public string? ParentDirectoryName { get; init; }
@@ -108,6 +110,9 @@ public sealed class CreateReserveRequest
     public ReserveSaveOptionRequest? SaveOption { get; init; }
 
     public ReserveEncodeOptionRequest? EncodeOption { get; init; }
+
+    /// <summary>チューナーが足りないときに、どれを先に取るか。大きいほうが先。</summary>
+    public int Priority { get; init; }
 }
 
 public sealed class TimeSpecifiedOptionRequest

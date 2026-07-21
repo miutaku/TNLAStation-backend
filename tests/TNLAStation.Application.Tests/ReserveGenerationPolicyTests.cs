@@ -208,6 +208,56 @@ public sealed class ReserveGenerationPolicyTests
     }
 
     [Fact]
+    public void TheRuleWithTheHigherPriorityTakesTheTuner()
+    {
+        ReserveGenerationInput input = CreateInput(
+            rules: [CreateRule(keyword: "ニュース", id: 1), CreateRule(keyword: "映画", id: 2, priority: ReservePriority.High)],
+            programs:
+            [
+                CreateProgram(1, name: "朝のニュース"),
+                CreateProgram(2, name: "映画劇場", channelId: 200),
+            ],
+            tuners: [new TunerDevice(0, ["GR"])]);
+
+        IReadOnlyList<ReserveAssignment> result = ReserveGenerationPolicy.Generate(input);
+
+        ReserveAssignment movie = result.Single(assignment => assignment.Target.RuleId == 2);
+        ReserveAssignment news = result.Single(assignment => assignment.Target.RuleId == 1);
+        Assert.Equal(0, movie.TunerIndex);
+        Assert.True(news.IsConflict);
+    }
+
+    [Fact]
+    public void APrioritisedRuleBeatsAManualReserve()
+    {
+        ReserveGenerationInput input = CreateInput(
+            rules: [CreateRule(keyword: "映画", priority: ReservePriority.High)],
+            programs: [CreateProgram(1, name: "映画劇場", channelId: 200)],
+            manualReserves: [CreateManualReserve(id: 10)],
+            tuners: [new TunerDevice(0, ["GR"])]);
+
+        IReadOnlyList<ReserveAssignment> result = ReserveGenerationPolicy.Generate(input);
+
+        Assert.Equal(0, result.Single(assignment => assignment.Target.RuleId == 1).TunerIndex);
+        Assert.True(result.Single(assignment => assignment.Target.ManualReserveId == 10).IsConflict);
+    }
+
+    [Fact]
+    public void ALoweredManualReserveGivesWayToANormalRule()
+    {
+        ReserveGenerationInput input = CreateInput(
+            rules: [CreateRule(keyword: "ニュース")],
+            programs: [CreateProgram(1, name: "朝のニュース", channelId: 200)],
+            manualReserves: [CreateManualReserve(id: 10, priority: ReservePriority.Low)],
+            tuners: [new TunerDevice(0, ["GR"])]);
+
+        IReadOnlyList<ReserveAssignment> result = ReserveGenerationPolicy.Generate(input);
+
+        Assert.Equal(0, result.Single(assignment => assignment.Target.RuleId == 1).TunerIndex);
+        Assert.True(result.Single(assignment => assignment.Target.ManualReserveId == 10).IsConflict);
+    }
+
+    [Fact]
     public void ProgramsThatAlreadyEndedAreNotReserved()
     {
         ReserveGenerationInput input = CreateInput(
@@ -259,17 +309,25 @@ public sealed class ReserveGenerationPolicyTests
             history ?? [],
             skipStates);
 
-    private static RecordingRule CreateRule(string keyword, long id = 1) =>
+    private static RecordingRule CreateRule(
+        string keyword,
+        long id = 1,
+        int priority = ReservePriority.Normal) =>
         new(
             id,
             IsTimeSpecification: false,
             new EpgSearchQuery(Keyword: keyword, Name: true, Gr: true),
-            new RuleReserveOption(Enable: true, AllowEndLack: true, AvoidDuplicate: false));
+            new RuleReserveOption(
+                Enable: true,
+                AllowEndLack: true,
+                AvoidDuplicate: false,
+                Priority: priority));
 
     private static ManualReserve CreateManualReserve(
         long id,
         long? programId = null,
-        long channelId = 100) =>
+        long channelId = 100,
+        int priority = ReservePriority.Normal) =>
         new(
             id,
             channelId,
@@ -277,7 +335,8 @@ public sealed class ReserveGenerationPolicyTests
             Now.AddHours(1),
             Now.AddHours(2),
             "手動で入れた番組",
-            programId);
+            programId,
+            Priority: priority);
 
     private static EpgProgram CreateProgram(
         long id,

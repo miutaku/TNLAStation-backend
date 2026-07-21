@@ -29,6 +29,7 @@ internal static class ReserveEntityMapper
             program?.Name ?? entity.Name,
             program?.HalfWidthName ?? entity.HalfWidthName,
             RuleId: entity.RuleId,
+            Priority: entity.Priority,
             Tags: DeserializeTags(manual?.TagsJson),
             ParentDirectoryName: manual?.ParentDirectoryName,
             Directory: manual?.Directory,

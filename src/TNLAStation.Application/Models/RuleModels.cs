@@ -18,7 +18,21 @@ public sealed record RuleReserveOption(
     bool AllowEndLack,
     bool AvoidDuplicate,
     int? PeriodToAvoidDuplicate = null,
-    IReadOnlyList<long>? Tags = null);
+    IReadOnlyList<long>? Tags = null,
+    int Priority = ReservePriority.Normal);
+
+/// <summary>
+/// 予約の優先度。チューナーが足りないとき、数の大きいほうが先に取る。値そのものに意味は
+/// 無く、比べるためだけにある。指定しなければ全部同じで、これまでどおり手動が先になる。
+/// </summary>
+public static class ReservePriority
+{
+    public const int Low = -1;
+
+    public const int Normal = 0;
+
+    public const int High = 1;
+}
 
 public sealed record RuleKeywordItem(long Id, string Keyword);
 

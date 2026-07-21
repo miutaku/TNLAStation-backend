@@ -66,6 +66,9 @@ public sealed record RuleReserveOptionResponse(bool Enable, bool AllowEndLack, b
     public int? PeriodToAvoidDuplicate { get; init; }
 
     public IReadOnlyList<long>? Tags { get; init; }
+
+    /// <summary>チューナーが足りないときに、どれを先に取るか。大きいほうが先。</summary>
+    public int Priority { get; init; }
 }
 
 public sealed record ReserveSaveOptionResponse
@@ -136,6 +139,8 @@ public sealed class RuleReserveOptionRequest
     public int? PeriodToAvoidDuplicate { get; init; }
 
     public IReadOnlyList<long>? Tags { get; init; }
+
+    public int Priority { get; init; }
 }
 
 internal static class RuleContractMapper
@@ -180,7 +185,8 @@ internal static class RuleContractMapper
                 rule.ReserveOption.AvoidDuplicate)
             {
                 PeriodToAvoidDuplicate = rule.ReserveOption.PeriodToAvoidDuplicate,
-                Tags = rule.ReserveOption.Tags
+                Tags = rule.ReserveOption.Tags,
+                Priority = rule.ReserveOption.Priority
             })
         {
             SaveOption = rule.SaveOption is null
@@ -221,7 +227,8 @@ internal static class RuleContractMapper
                 request.ReserveOption.AllowEndLack,
                 request.ReserveOption.AvoidDuplicate,
                 request.ReserveOption.PeriodToAvoidDuplicate,
-                request.ReserveOption.Tags),
+                request.ReserveOption.Tags,
+                request.ReserveOption.Priority),
             request.SaveOption is null
                 ? null
                 : new ReserveSaveSettings(

@@ -41,7 +41,8 @@ public sealed record CreateReserveCommand(
     TimeSpecifiedReserve? TimeSpecified,
     IReadOnlyList<long>? Tags,
     ReserveSaveSettings? Save,
-    ReserveEncodeSettings? Encode);
+    ReserveEncodeSettings? Encode,
+    int Priority = ReservePriority.Normal);
 
 public sealed record TimeSpecifiedReserve(string Name, long ChannelId, long StartAt, long EndAt);
 
