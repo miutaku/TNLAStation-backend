@@ -95,6 +95,40 @@ public interface IRecordedTagRepository
     ValueTask<Page<RecordedTag>> ListAsync(RecordedTagQuery query, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// 録画 1 件を読み書きする面。一覧とは分ける。一覧は保存先を持たない構成でも空で返せるが、
+/// 1 件の取得や削除は、録画を実際に持っている実装でしか意味を成さない。
+/// </summary>
+public interface IRecordedItemRepository
+{
+    ValueTask<RecordedProgram?> GetAsync(long recordedId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 録画とファイルを消す。行だけ消すと、どこからも辿れないファイルが容量を食い続ける。
+    /// </summary>
+    ValueTask<bool> DeleteAsync(long recordedId, CancellationToken cancellationToken);
+
+    ValueTask<bool> SetProtectedAsync(long recordedId, bool isProtected, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// tag の作成と付け外し。
+/// </summary>
+public interface IRecordedTagWriteRepository
+{
+    ValueTask<long> AddTagAsync(string name, string color, CancellationToken cancellationToken);
+
+    ValueTask<bool> UpdateTagAsync(long tagId, string name, string color, CancellationToken cancellationToken);
+
+    ValueTask<bool> DeleteTagAsync(long tagId, CancellationToken cancellationToken);
+
+    ValueTask<bool> SetTagAsync(
+        long recordedId,
+        long tagId,
+        bool attached,
+        CancellationToken cancellationToken);
+}
+
 public interface IRuleRepository
 {
     ValueTask<Page<RecordingRule>> ListAsync(RuleQuery query, CancellationToken cancellationToken);

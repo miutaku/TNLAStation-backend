@@ -18,6 +18,14 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<ReserveSkipEntity> ReserveSkips => Set<ReserveSkipEntity>();
 
+    public DbSet<RecordedEntity> Recorded => Set<RecordedEntity>();
+
+    public DbSet<VideoFileEntity> VideoFiles => Set<VideoFileEntity>();
+
+    public DbSet<RecordedTagEntity> RecordedTags => Set<RecordedTagEntity>();
+
+    public DbSet<RecordedTagLinkEntity> RecordedTagLinks => Set<RecordedTagLinkEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -266,6 +274,93 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.HasKey(item => item.Key).HasName("pk_reserve_skips");
             entity.Property(item => item.Key).HasColumnName("key");
             entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+        });
+
+        modelBuilder.Entity<RecordedEntity>(entity =>
+        {
+            entity.ToTable("recorded", table =>
+                table.HasCheckConstraint("ck_recorded_time", "end_at >= start_at"));
+            entity.HasKey(item => item.Id).HasName("pk_recorded");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.ProgramId).HasColumnName("program_id");
+            entity.Property(item => item.RuleId).HasColumnName("rule_id");
+            entity.Property(item => item.ChannelId).HasColumnName("channel_id");
+            entity.Property(item => item.StartAt).HasColumnName("start_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.EndAt).HasColumnName("end_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.HalfWidthName).HasColumnName("half_width_name");
+            entity.Property(item => item.Description).HasColumnName("description");
+            entity.Property(item => item.HalfWidthDescription).HasColumnName("half_width_description");
+            entity.Property(item => item.Extended).HasColumnName("extended");
+            entity.Property(item => item.HalfWidthExtended).HasColumnName("half_width_extended");
+            entity.Property(item => item.Genre1).HasColumnName("genre1");
+            entity.Property(item => item.SubGenre1).HasColumnName("sub_genre1");
+            entity.Property(item => item.Genre2).HasColumnName("genre2");
+            entity.Property(item => item.SubGenre2).HasColumnName("sub_genre2");
+            entity.Property(item => item.Genre3).HasColumnName("genre3");
+            entity.Property(item => item.SubGenre3).HasColumnName("sub_genre3");
+            entity.Property(item => item.IsRecording).HasColumnName("is_recording");
+            entity.Property(item => item.IsProtected).HasColumnName("is_protected");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => item.StartAt).HasDatabaseName("ix_recorded_start_at");
+            entity.HasIndex(item => item.IsRecording).HasDatabaseName("ix_recorded_is_recording");
+            entity.HasIndex(item => item.ChannelId).HasDatabaseName("ix_recorded_channel");
+            entity.HasIndex(item => item.RuleId).HasDatabaseName("ix_recorded_rule");
+            // 同じ予約で二重に録らない。再起動直後の取りこぼしを直す処理が二度動いても増えない。
+            entity.HasIndex(item => item.ProgramId)
+                .IsUnique()
+                .HasFilter("program_id IS NOT NULL")
+                .HasDatabaseName("uq_recorded_program");
+        });
+
+        modelBuilder.Entity<VideoFileEntity>(entity =>
+        {
+            entity.ToTable("video_files", table =>
+                table.HasCheckConstraint("ck_video_files_type", "type IN ('ts', 'encoded')"));
+            entity.HasKey(item => item.Id).HasName("pk_video_files");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.RecordedId).HasColumnName("recorded_id");
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.Filename).HasColumnName("filename");
+            entity.Property(item => item.ParentDirectoryName).HasColumnName("parent_directory_name");
+            entity.Property(item => item.Type).HasColumnName("type");
+            entity.Property(item => item.Size).HasColumnName("size");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => item.RecordedId).HasDatabaseName("ix_video_files_recorded");
+            entity.HasOne(item => item.Recorded)
+                .WithMany(recorded => recorded.VideoFiles)
+                .HasForeignKey(item => item.RecordedId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_video_files_recorded");
+        });
+
+        modelBuilder.Entity<RecordedTagEntity>(entity =>
+        {
+            entity.ToTable("recorded_tags");
+            entity.HasKey(item => item.Id).HasName("pk_recorded_tags");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.Name).HasColumnName("name");
+            entity.Property(item => item.Color).HasColumnName("color");
+            entity.HasIndex(item => item.Name).IsUnique().HasDatabaseName("uq_recorded_tags_name");
+        });
+
+        modelBuilder.Entity<RecordedTagLinkEntity>(entity =>
+        {
+            entity.ToTable("recorded_tag_links");
+            entity.HasKey(item => new { item.RecordedId, item.TagId }).HasName("pk_recorded_tag_links");
+            entity.Property(item => item.RecordedId).HasColumnName("recorded_id");
+            entity.Property(item => item.TagId).HasColumnName("tag_id");
+            entity.HasIndex(item => item.TagId).HasDatabaseName("ix_recorded_tag_links_tag");
+            entity.HasOne(item => item.Recorded)
+                .WithMany(recorded => recorded.TagLinks)
+                .HasForeignKey(item => item.RecordedId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_recorded_tag_links_recorded");
+            entity.HasOne(item => item.Tag)
+                .WithMany(tag => tag.Links)
+                .HasForeignKey(item => item.TagId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_recorded_tag_links_tag");
         });
 
         modelBuilder.Entity<EpgSyncStateEntity>(entity =>

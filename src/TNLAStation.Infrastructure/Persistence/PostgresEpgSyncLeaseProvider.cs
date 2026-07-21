@@ -21,3 +21,15 @@ public sealed class PostgresReserveLeaseProvider(string connectionString) : IRes
     public ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken) =>
         PostgresAdvisoryLease.TryAcquireAsync(connectionString, AdvisoryLockKey, cancellationToken);
 }
+
+/// <summary>
+/// 録画は録り終わるまで鍵を握り続ける。予約の生成と同じ鍵にすると、録っている間ずっと
+/// 予約が作り直されない。
+/// </summary>
+public sealed class PostgresRecordingLeaseProvider(string connectionString) : IRecordingLeaseProvider
+{
+    private const long AdvisoryLockKey = 23_728_404_687_626_569;
+
+    public ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken) =>
+        PostgresAdvisoryLease.TryAcquireAsync(connectionString, AdvisoryLockKey, cancellationToken);
+}

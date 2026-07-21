@@ -51,3 +51,13 @@ public sealed record RecordedSearchOptionsResponse(
 public sealed record RecordedChannelListItemResponse(int Cnt, long ChannelId);
 
 public sealed record RecordedGenreListItemResponse(int Cnt, int Genre);
+
+public sealed record AddedRecordedTagResponse(long TagId);
+
+public sealed class RecordedTagRequest
+{
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>一覧で見分けるための色。指定が無ければ既定の色にする。</summary>
+    public string Color { get; init; } = "#4caf50";
+}

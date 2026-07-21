@@ -25,18 +25,15 @@ public sealed partial class ReserveGenerationHostedService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // 番組表を同期している側だけが作り直す。複数の実体が別々に作り直すと、
-            // チューナーの割り当てが互いに上書きし合う。
-            await using IAsyncDisposable? lease = await leaseProvider.TryAcquireAsync(stoppingToken);
-            if (lease is null)
-            {
-                await Task.Delay(interval, timeProvider, stoppingToken);
-                continue;
-            }
-
+            // 鍵は生成している間だけ持つ。待っている間も握っていると、頼まれた作り直しも
+            // 次の周期が来るまで動けない。
             try
             {
-                await generator.RunAsync(stoppingToken);
+                await using IAsyncDisposable? lease = await leaseProvider.TryAcquireAsync(stoppingToken);
+                if (lease is not null)
+                {
+                    await generator.RunAsync(stoppingToken);
+                }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

@@ -53,6 +53,15 @@ public interface IReserveGenerationLeaseProvider
     ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// 録画するのは 1 つだけ、という取り決め。予約の生成とは別に持つ。生成は数分おきに終わる
+/// 仕事だが、録画は録っている間ずっと握り続けるので、同じ鍵にすると生成が止まる。
+/// </summary>
+public interface IRecordingLeaseProvider
+{
+    ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken);
+}
+
 public interface IChannelLogoProvider
 {
     ValueTask<ReadOnlyMemory<byte>> GetLogoAsync(long channelId, CancellationToken cancellationToken);

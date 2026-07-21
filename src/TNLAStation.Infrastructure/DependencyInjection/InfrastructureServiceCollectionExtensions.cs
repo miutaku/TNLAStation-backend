@@ -7,6 +7,7 @@ using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Mirakurun;
 using TNLAStation.Infrastructure.Persistence;
 using TNLAStation.Infrastructure.Repositories;
+using TNLAStation.Infrastructure.Recording;
 using TNLAStation.Infrastructure.Reserves;
 using TNLAStation.Infrastructure.Streaming;
 
@@ -34,13 +35,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
         services.Configure<StreamingOptions>(configuration.GetSection(StreamingOptions.SectionName));
         services.Configure<ReserveOptions>(configuration.GetSection(ReserveOptions.SectionName));
+        services.Configure<RecordingOptions>(configuration.GetSection(RecordingOptions.SectionName));
 
         services.AddSingleton<IConfigRepository, MockConfigRepository>();
-        services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
-        services.AddSingleton<IRecordingRepository, EmptyRecordingRepository>();
         services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
-        services.AddSingleton<IRecordedTagRepository, EmptyRecordedTagRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
 
         AddEpgStore(services, configuration.GetConnectionString(PostgresConnectionName));
@@ -59,6 +58,7 @@ public static class InfrastructureServiceCollectionExtensions
             services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<InMemoryEpgRepository>());
             services.AddSingleton<IEpgSyncLeaseProvider, InMemoryEpgSyncLeaseProvider>();
             services.AddSingleton<IReserveGenerationLeaseProvider, InMemoryEpgSyncLeaseProvider>();
+            services.AddSingleton<IRecordingLeaseProvider, InMemoryEpgSyncLeaseProvider>();
             return;
         }
 
@@ -70,6 +70,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEpgStore>(provider => provider.GetRequiredService<PostgresEpgRepository>());
         services.AddSingleton<IEpgSyncLeaseProvider>(_ => new PostgresEpgSyncLeaseProvider(connectionString));
         services.AddSingleton<IReserveGenerationLeaseProvider>(_ => new PostgresReserveLeaseProvider(connectionString));
+        services.AddSingleton<IRecordingLeaseProvider>(_ => new PostgresRecordingLeaseProvider(connectionString));
     }
 
     private static void AddRuleStore(IServiceCollection services, string? connectionString)
@@ -78,10 +79,31 @@ public static class InfrastructureServiceCollectionExtensions
         {
             services.AddSingleton<IRuleRepository, InMemoryRuleRepository>();
             services.AddSingleton<IReserveRepository, InMemoryReserveRepository>();
+            // 保存先を持たない構成。録画は残せないので、一覧はどれも「いま空」を返す。
+            services.AddSingleton<IRecordedRepository, InMemoryRecordedRepository>();
+            services.AddSingleton<IRecordingRepository, EmptyRecordingRepository>();
+            services.AddSingleton<IRecordedTagRepository, EmptyRecordedTagRepository>();
+            services.AddSingleton<UnavailableRecordedItemRepository>();
+            services.AddSingleton<IRecordedItemRepository>(provider =>
+                provider.GetRequiredService<UnavailableRecordedItemRepository>());
+            services.AddSingleton<IRecordedTagWriteRepository>(provider =>
+                provider.GetRequiredService<UnavailableRecordedItemRepository>());
             return;
         }
 
         services.AddSingleton<IRuleRepository, PostgresRuleRepository>();
+        services.AddSingleton<PostgresRecordedRepository>();
+        services.AddSingleton<IRecordedRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<IRecordingRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<IRecordedTagRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<IRecordedItemRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<IRecordedTagWriteRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<IRecordingStore, PostgresRecordingStore>();
         services.AddSingleton<PostgresReserveRepository>();
         services.AddSingleton<IReserveRepository>(provider =>
             provider.GetRequiredService<PostgresReserveRepository>());
@@ -121,6 +143,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddHostedService<EpgSyncHostedService>();
 
         // 予約の生成にはチューナーの本数が要るので、Mirakurun がある構成でだけ動かす。
+        services.AddHostedService<RecordingScheduler>();
         services.AddSingleton<ReserveGenerator>();
         services.AddSingleton<IReserveGenerationTrigger>(provider =>
             provider.GetRequiredService<ReserveGenerator>());
