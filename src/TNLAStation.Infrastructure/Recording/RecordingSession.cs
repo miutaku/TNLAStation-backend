@@ -16,6 +16,7 @@ internal sealed partial class RecordingSession(
     string path,
     IMirakurunClient mirakurun,
     IRecordingStore store,
+    IThumbnailService thumbnails,
     ILogger logger) : IDisposable
 {
     private readonly CancellationTokenSource lifetime = new();
@@ -97,6 +98,10 @@ internal sealed partial class RecordingSession(
         {
             await store.CompleteAsync(recordedId, videoFileId, written, CancellationToken.None);
             LogRecordingFinished(logger, path, written);
+
+            // 一覧で中身を思い出せるように 1 枚取る。取れなくても録画は成立するので、
+            // 失敗しても録画の側は何も変えない。
+            await thumbnails.CreateForVideoFileAsync(videoFileId, CancellationToken.None);
         }
         else
         {

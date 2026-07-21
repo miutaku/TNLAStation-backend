@@ -39,6 +39,11 @@ internal static class RecordedEndpoints
             .WithTags("recorded")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
+        recorded.MapPost("/cleanup", CleanupAsync)
+            .WithName("CleanupRecorded")
+            .WithSummary("実体の無い録画を片付ける")
+            .WithTags("recorded");
+
         RouteGroupBuilder tags = endpoints.MapGroup("/api/tags");
 
         tags.MapPost("/", AddTagAsync)
@@ -113,6 +118,18 @@ internal static class RecordedEndpoints
         return await repository.SetProtectedAsync(recordedId, isProtected, cancellationToken)
             ? Results.NoContent()
             : NotFound();
+    }
+
+    /// <summary>
+    /// ファイルが無くなった録画を消す。外からファイルを消したときに、再生できない録画が
+    /// 一覧に残り続けるのを片付ける。
+    /// </summary>
+    private static async Task<IResult> CleanupAsync(
+        IRecordedItemRepository repository,
+        CancellationToken cancellationToken)
+    {
+        int removed = await repository.CleanupAsync(cancellationToken);
+        return Results.Ok(new RecordedCleanupResponse(removed));
     }
 
     private static async Task<IResult> AddTagAsync(

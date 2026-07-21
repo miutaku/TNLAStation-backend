@@ -23,6 +23,11 @@ internal static class CollectionEndpoints
             .WithTags("recording")
             .Produces<RecordsResponse>();
 
+        api.MapPost("/recording/resettimer", ResetRecordingTimerAsync)
+            .WithName("ResetRecordingTimer")
+            .WithSummary("録画予定を組み直す")
+            .WithTags("recording");
+
         api.MapGet("/recorded/options", GetRecordedOptionsAsync)
             .WithName("GetRecordedOptions")
             .WithSummary("録画検索オプションを取得")
@@ -97,6 +102,17 @@ internal static class CollectionEndpoints
         return Results.Ok(new RecordsResponse(
             page.Items.Select(item => item.ToResponse(isHalfWidth)).ToArray(),
             page.Total));
+    }
+
+    /// <summary>
+    /// 録画の予定を組み直す。番組表が動いたのに反映が遅れているときの手動の一押し。
+    /// </summary>
+    private static async Task<IResult> ResetRecordingTimerAsync(
+        IReserveGenerationTrigger trigger,
+        CancellationToken cancellationToken)
+    {
+        await trigger.RequestAsync(cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> GetRecordedOptionsAsync(

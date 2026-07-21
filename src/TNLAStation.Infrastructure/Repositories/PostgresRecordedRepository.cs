@@ -117,6 +117,23 @@ public sealed class PostgresRecordedRepository(
         return true;
     }
 
+    public async ValueTask<int> CleanupAsync(CancellationToken cancellationToken)
+    {
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        RecordedEntity[] candidates = await context.Recorded
+            .Include(item => item.VideoFiles)
+            .Where(item => !item.IsRecording && !item.IsProtected)
+            .ToArrayAsync(cancellationToken);
+
+        RecordedEntity[] gone = [.. candidates.Where(item =>
+            item.VideoFiles.Count == 0 ||
+            item.VideoFiles.All(file => !File.Exists(Path.Combine(file.ParentDirectoryName, file.Filename))))];
+
+        context.Recorded.RemoveRange(gone);
+        await context.SaveChangesAsync(cancellationToken);
+        return gone.Length;
+    }
+
     public async ValueTask<Page<RecordedTag>> ListAsync(
         RecordedTagQuery query,
         CancellationToken cancellationToken)
@@ -274,6 +291,7 @@ public sealed class PostgresRecordedRepository(
     private static IQueryable<RecordedEntity> Include(IQueryable<RecordedEntity> recorded) =>
         recorded
             .Include(item => item.VideoFiles)
+            .Include(item => item.Thumbnails)
             .Include(item => item.TagLinks)
             .ThenInclude(link => link.Tag);
 

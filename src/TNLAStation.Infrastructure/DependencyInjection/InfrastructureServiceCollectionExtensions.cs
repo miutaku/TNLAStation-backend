@@ -38,6 +38,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<ReserveOptions>(configuration.GetSection(ReserveOptions.SectionName));
         services.Configure<RecordingOptions>(configuration.GetSection(RecordingOptions.SectionName));
         services.Configure<EncodeOptions>(configuration.GetSection(EncodeOptions.SectionName));
+        services.Configure<ThumbnailOptions>(configuration.GetSection(ThumbnailOptions.SectionName));
 
         services.AddSingleton<IConfigRepository, MockConfigRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
@@ -93,6 +94,7 @@ public static class InfrastructureServiceCollectionExtensions
             services.AddSingleton<IVideoFileRepository, EmptyVideoFileRepository>();
             services.AddSingleton<IEncodeQueueRepository, EmptyEncodeQueueRepository>();
             services.AddSingleton<IEncodeTaskList, UnavailableEncodeTaskList>();
+            services.AddSingleton<IThumbnailService, UnavailableThumbnailService>();
             return;
         }
 
@@ -115,6 +117,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEncodeQueueRepository>(provider =>
             provider.GetRequiredService<PostgresEncodeTaskList>());
         services.AddHostedService<EncodeWorker>();
+        services.AddSingleton<IThumbnailService, FfmpegThumbnailService>();
         services.AddSingleton<PostgresReserveRepository>();
         services.AddSingleton<IReserveRepository>(provider =>
             provider.GetRequiredService<PostgresReserveRepository>());

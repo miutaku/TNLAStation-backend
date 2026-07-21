@@ -53,6 +53,8 @@ public sealed class RecordedEntity
     public ICollection<VideoFileEntity> VideoFiles { get; } = [];
 
     public ICollection<RecordedTagLinkEntity> TagLinks { get; } = [];
+
+    public ICollection<ThumbnailEntity> Thumbnails { get; } = [];
 }
 
 /// <summary>

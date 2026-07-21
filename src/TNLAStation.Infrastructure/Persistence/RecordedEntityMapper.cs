@@ -28,6 +28,7 @@ internal static class RecordedEntityMapper
             SubGenre2: entity.SubGenre2,
             Genre3: entity.Genre3,
             SubGenre3: entity.SubGenre3,
+            Thumbnails: [.. entity.Thumbnails.OrderBy(thumbnail => thumbnail.Id).Select(thumbnail => thumbnail.Id)],
             VideoFiles: [.. entity.VideoFiles
                 .OrderBy(file => file.Id)
                 .Select(file => new VideoFile(file.Id, file.Name, file.Filename, file.Type, file.Size))],

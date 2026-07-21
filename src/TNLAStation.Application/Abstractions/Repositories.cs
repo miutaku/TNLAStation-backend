@@ -109,6 +109,12 @@ public interface IRecordedItemRepository
     ValueTask<bool> DeleteAsync(long recordedId, CancellationToken cancellationToken);
 
     ValueTask<bool> SetProtectedAsync(long recordedId, bool isProtected, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 実体が無くなった録画を片付ける。外からファイルを消しても、行だけ残って一覧に並ぶ。
+    /// 保護されているものは残す。人が残すと決めたものを、こちらの判断で消さない。
+    /// </summary>
+    ValueTask<int> CleanupAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>

@@ -20,6 +20,7 @@ public sealed partial class RecordingScheduler(
     IRecordingStore store,
     IEpgRepository epg,
     IMirakurunClient mirakurun,
+    IThumbnailService thumbnails,
     IOptions<RecordingOptions> recordingOptions,
     IOptions<StorageOptions> storageOptions,
     IRecordingLeaseProvider leaseProvider,
@@ -151,6 +152,7 @@ public sealed partial class RecordingScheduler(
             Path.Combine(directory, filename),
             mirakurun,
             store,
+            thumbnails,
             logger);
         running[reserve.Id] = session;
         session.Start();

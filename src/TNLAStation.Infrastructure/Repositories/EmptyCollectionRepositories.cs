@@ -71,6 +71,12 @@ public sealed class UnavailableRecordedItemRepository : IRecordedItemRepository,
         return ValueTask.FromResult(false);
     }
 
+    public ValueTask<int> CleanupAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(0);
+    }
+
     public ValueTask<long> AddTagAsync(string name, string color, CancellationToken cancellationToken) =>
         throw new InvalidOperationException("RecordedStoreIsNotConfigured");
 
@@ -140,6 +146,42 @@ public sealed class UnavailableEncodeTaskList : IEncodeTaskList
     }
 
     public ValueTask<int> CancelForRecordedAsync(long recordedId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(0);
+    }
+}
+
+/// <summary>
+/// 録画を保存する場所を持たない構成。元になる動画が無いので、作る画像もない。
+/// </summary>
+public sealed class UnavailableThumbnailService : IThumbnailService
+{
+    public ValueTask<ThumbnailFile?> GetAsync(long thumbnailId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<ThumbnailFile?>(null);
+    }
+
+    public ValueTask<long?> CreateForVideoFileAsync(long videoFileId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<long?>(null);
+    }
+
+    public ValueTask<int> CreateMissingAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(0);
+    }
+
+    public ValueTask<bool> DeleteAsync(long thumbnailId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(false);
+    }
+
+    public ValueTask<int> CleanupAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.FromResult(0);

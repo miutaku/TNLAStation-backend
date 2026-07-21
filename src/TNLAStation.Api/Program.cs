@@ -58,6 +58,8 @@ app.MapCollectionEndpoints();
 app.MapReserveEndpoints();
 app.MapRecordedEndpoints();
 app.MapVideoEndpoints();
+app.MapThumbnailEndpoints();
+app.MapIptvEndpoints();
 app.MapStreamEndpoints();
 
 app.Run();

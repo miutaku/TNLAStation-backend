@@ -28,6 +28,8 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
 
     public DbSet<EncodeTaskEntity> EncodeTasks => Set<EncodeTaskEntity>();
 
+    public DbSet<ThumbnailEntity> Thumbnails => Set<ThumbnailEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
@@ -363,6 +365,23 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
                 .HasForeignKey(item => item.TagId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_recorded_tag_links_tag");
+        });
+
+        modelBuilder.Entity<ThumbnailEntity>(entity =>
+        {
+            entity.ToTable("thumbnails");
+            entity.HasKey(item => item.Id).HasName("pk_thumbnails");
+            entity.Property(item => item.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(item => item.RecordedId).HasColumnName("recorded_id");
+            entity.Property(item => item.ParentDirectoryName).HasColumnName("parent_directory_name");
+            entity.Property(item => item.Filename).HasColumnName("filename");
+            entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => item.RecordedId).HasDatabaseName("ix_thumbnails_recorded");
+            entity.HasOne(item => item.Recorded)
+                .WithMany(recorded => recorded.Thumbnails)
+                .HasForeignKey(item => item.RecordedId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_thumbnails_recorded");
         });
 
         modelBuilder.Entity<EncodeTaskEntity>(entity =>

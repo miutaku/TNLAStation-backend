@@ -88,3 +88,7 @@ public sealed class AddEncodeRequest
 
     public bool? IsSaveSameDirectory { get; init; }
 }
+
+public sealed record AddedThumbnailResponse(long ThumbnailId);
+
+public sealed record RecordedCleanupResponse(int Removed);
