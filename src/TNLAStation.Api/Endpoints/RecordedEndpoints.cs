@@ -27,19 +27,19 @@ internal static class RecordedEndpoints
             .WithTags("recorded")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-        recorded.MapPost("/{recordedId:long}/protect", ProtectAsync)
+        recorded.MapPut("/{recordedId:long}/protect", ProtectAsync)
             .WithName("ProtectRecorded")
             .WithSummary("録画の自動削除を防ぐ")
             .WithTags("recorded")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-        recorded.MapPost("/{recordedId:long}/unprotect", UnprotectAsync)
+        recorded.MapPut("/{recordedId:long}/unprotect", UnprotectAsync)
             .WithName("UnprotectRecorded")
             .WithSummary("録画の自動削除の防止を解除")
             .WithTags("recorded")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-        RouteGroupBuilder tags = endpoints.MapGroup("/api/recorded/tags");
+        RouteGroupBuilder tags = endpoints.MapGroup("/api/tags");
 
         tags.MapPost("/", AddTagAsync)
             .WithName("AddRecordedTag")
@@ -59,13 +59,13 @@ internal static class RecordedEndpoints
             .WithTags("tags")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-        tags.MapPut("/{tagId:long}/recorded/{recordedId:long}", AttachTagAsync)
+        tags.MapPut("/{tagId:long}/relate", AttachTagAsync)
             .WithName("AttachRecordedTag")
             .WithSummary("録画へタグを付ける")
             .WithTags("tags")
             .Produces<ErrorResponse>(StatusCodes.Status404NotFound);
 
-        tags.MapDelete("/{tagId:long}/recorded/{recordedId:long}", DetachTagAsync)
+        tags.MapDelete("/{tagId:long}/relate", DetachTagAsync)
             .WithName("DetachRecordedTag")
             .WithSummary("録画からタグを外す")
             .WithTags("tags")
@@ -123,7 +123,7 @@ internal static class RecordedEndpoints
         ArgumentNullException.ThrowIfNull(request);
 
         long id = await repository.AddTagAsync(request.Name, request.Color, cancellationToken);
-        return Results.Created($"/api/recorded/tags/{id}", new AddedRecordedTagResponse(id));
+        return Results.Created($"/api/tags/{id}", new AddedRecordedTagResponse(id));
     }
 
     private static async Task<IResult> UpdateTagAsync(
@@ -151,18 +151,20 @@ internal static class RecordedEndpoints
 
     private static async Task<IResult> AttachTagAsync(
         long tagId,
-        long recordedId,
+        RelateRecordedTagRequest request,
         IRecordedTagWriteRepository repository,
         CancellationToken cancellationToken)
     {
-        return await repository.SetTagAsync(recordedId, tagId, attached: true, cancellationToken)
+        ArgumentNullException.ThrowIfNull(request);
+
+        return await repository.SetTagAsync(request.RecordedId, tagId, attached: true, cancellationToken)
             ? Results.NoContent()
             : NotFound("tag or recorded is not found");
     }
 
     private static async Task<IResult> DetachTagAsync(
         long tagId,
-        long recordedId,
+        [FromQuery] long recordedId,
         IRecordedTagWriteRepository repository,
         CancellationToken cancellationToken)
     {

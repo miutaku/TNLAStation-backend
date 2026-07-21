@@ -61,3 +61,8 @@ public sealed class RecordedTagRequest
     /// <summary>一覧で見分けるための色。指定が無ければ既定の色にする。</summary>
     public string Color { get; init; } = "#4caf50";
 }
+
+public sealed class RelateRecordedTagRequest
+{
+    public long RecordedId { get; init; }
+}
