@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Primitives;
 using TNLAStation.Api.Contracts;
 
 namespace TNLAStation.Api.Middleware;
