@@ -161,15 +161,15 @@ public static class EpgStationConfigLoader
             ConcurrentEncodeNum = Int(config, "concurrentEncodeNum") ?? 0,
             Encode = ReadEncode(config),
             IsSuppressReservesUpdateAllLog = Bool(config, "isSuppressReservesUpdateAllLog") ?? false,
-            ReserveNewAddtionCommand = String(config, "reserveNewAddtionCommand"),
-            ReserveUpdateCommand = String(config, "reserveUpdateCommand"),
-            ReservedeletedCommand = String(config, "reservedeletedCommand"),
-            RecordingPreStartCommand = String(config, "recordingPreStartCommand"),
-            RecordingPrepRecFailedCommand = String(config, "recordingPrepRecFailedCommand"),
-            RecordingStartCommand = String(config, "recordingStartCommand"),
-            RecordingFinishCommand = String(config, "recordingFinishCommand"),
-            RecordingFailedCommand = String(config, "recordingFailedCommand"),
-            EncodingFinishCommand = String(config, "encodingFinishCommand"),
+            ReserveNewAddtionCommand = ExpandRoot(String(config, "reserveNewAddtionCommand"), rootPath),
+            ReserveUpdateCommand = ExpandRoot(String(config, "reserveUpdateCommand"), rootPath),
+            ReservedeletedCommand = ExpandRoot(String(config, "reservedeletedCommand"), rootPath),
+            RecordingPreStartCommand = ExpandRoot(String(config, "recordingPreStartCommand"), rootPath),
+            RecordingPrepRecFailedCommand = ExpandRoot(String(config, "recordingPrepRecFailedCommand"), rootPath),
+            RecordingStartCommand = ExpandRoot(String(config, "recordingStartCommand"), rootPath),
+            RecordingFinishCommand = ExpandRoot(String(config, "recordingFinishCommand"), rootPath),
+            RecordingFailedCommand = ExpandRoot(String(config, "recordingFailedCommand"), rootPath),
+            EncodingFinishCommand = ExpandRoot(String(config, "encodingFinishCommand"), rootPath),
             UrlScheme = Has(config, "urlscheme") ? ReadUrlScheme(Map(config, "urlscheme")) : DefaultUrlScheme,
             StreamFilePath = DirectoryFormatting(
                 String(config, "streamFilePath") ?? Combine(rootPath, "data", "streamfiles"),
@@ -467,6 +467,9 @@ public static class EpgStationConfigLoader
             ? replaced[..^1]
             : replaced;
     }
+
+    private static string? ExpandRoot(string? command, string rootPath) =>
+        command?.Replace("%ROOT%", rootPath, StringComparison.Ordinal);
 
     private static string Combine(string root, params string[] parts) =>
         Path.Combine([root, .. parts]);

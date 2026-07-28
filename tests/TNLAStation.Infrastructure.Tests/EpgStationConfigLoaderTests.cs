@@ -320,7 +320,7 @@ public sealed class EpgStationConfigLoaderTests
                   suffix: .mp4
                   rate: 3.5
             isSuppressReservesUpdateAllLog: true
-            recordingStartCommand: /usr/local/bin/start.sh
+            recordingStartCommand: /bin/sh %ROOT%/config/start.sh
             kodiHosts:
                 - name: living
                   host: http://192.168.1.10:8080/some/path
@@ -387,7 +387,9 @@ public sealed class EpgStationConfigLoaderTests
             Assert.Equal(3.5, mode.RateTimeoutMultiplier);
 
             CommandHookOptions hooks = configuration.GetSection("CommandHooks").Get<CommandHookOptions>()!;
-            Assert.Equal("/usr/local/bin/start.sh", hooks.RecordingStartCommand);
+            Assert.Equal(
+                $"/bin/sh {Path.GetDirectoryName(directory)!}/config/start.sh",
+                hooks.RecordingStartCommand);
             Assert.Null(hooks.RecordingFinishCommand);
 
             KodiOptions kodi = configuration.GetSection("Kodi").Get<KodiOptions>()!;

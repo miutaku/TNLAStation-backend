@@ -209,7 +209,14 @@ internal sealed partial class RecordingSession(
 
             // 一覧で中身を思い出せるように 1 枚取る。取れなくても録画は成立するので、
             // 失敗しても録画の側は何も変えない。
-            await thumbnails.CreateForVideoFileAsync(videoFileId, CancellationToken.None);
+            try
+            {
+                await thumbnails.CreateForVideoFileAsync(videoFileId, CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                LogThumbnailFailed(logger, path, exception);
+            }
             hooks.RunRecordedHook(recordingFinishCommand, BuildRecordedPayload(analyzer.Defects, dropLogPath));
             notifier.NotifyClient();
         }
@@ -253,12 +260,13 @@ internal sealed partial class RecordingSession(
             return null;
         }
 
-        Directory.CreateDirectory(directory);
         string filename = $"{Path.GetFileNameWithoutExtension(path)}.drop.log";
+        string dropLogPath = Path.Combine(directory, filename);
         try
         {
+            Directory.CreateDirectory(directory);
             await File.WriteAllTextAsync(
-                Path.Combine(directory, filename),
+                dropLogPath,
                 string.Join(
                     '\n',
                     $"file: {Path.GetFileName(path)}",
@@ -268,10 +276,11 @@ internal sealed partial class RecordingSession(
                     string.Empty),
                 CancellationToken.None);
         }
-        catch (IOException exception)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             // 書けなくても数字は残す。録画そのものには影響しない。
             LogDropLogFailed(logger, path, exception);
+            return null;
         }
 
         await store.SaveDropLogAsync(recordedId, defects, directory, filename, CancellationToken.None);
@@ -280,14 +289,14 @@ internal sealed partial class RecordingSession(
             LogDefectsFound(logger, path, defects.ErrorCount, defects.DropCount, defects.ScramblingCount);
         }
 
-        return Path.Combine(directory, filename);
+        return dropLogPath;
     }
 
     [LoggerMessage(
         EventId = 4013,
         Level = LogLevel.Warning,
         Message = "The recording {Path} has defects: {ErrorCount} errors, {DropCount} drops, {ScramblingCount} scrambled")]
-    private static partial void LogDefectsFound(
+    static partial void LogDefectsFound(
         ILogger logger,
         string path,
         long errorCount,
@@ -298,29 +307,35 @@ internal sealed partial class RecordingSession(
         EventId = 4014,
         Level = LogLevel.Warning,
         Message = "Could not write the drop log next to {Path}")]
-    private static partial void LogDropLogFailed(ILogger logger, string path, Exception exception);
+    static partial void LogDropLogFailed(ILogger logger, string path, Exception exception);
+
+    [LoggerMessage(
+        EventId = 4016,
+        Level = LogLevel.Warning,
+        Message = "Could not create a thumbnail for {Path}")]
+    static partial void LogThumbnailFailed(ILogger logger, string path, Exception exception);
 
     [LoggerMessage(
         EventId = 4015,
         Level = LogLevel.Error,
         Message = "Could not move the finished recording from the temporary path {TempPath} to {FinalPath}; the recording is aborted")]
-    private static partial void LogTempMoveFailed(ILogger logger, string tempPath, string finalPath, Exception exception);
+    static partial void LogTempMoveFailed(ILogger logger, string tempPath, string finalPath, Exception exception);
 
     [LoggerMessage(
         EventId = 4010,
         Level = LogLevel.Information,
         Message = "Finished recording {Path} ({Size} bytes)")]
-    private static partial void LogRecordingFinished(ILogger logger, string path, long size);
+    static partial void LogRecordingFinished(ILogger logger, string path, long size);
 
     [LoggerMessage(
         EventId = 4011,
         Level = LogLevel.Warning,
         Message = "The recording {Path} lost its feed; what was received is kept")]
-    private static partial void LogRecordingFailed(ILogger logger, string path, Exception exception);
+    static partial void LogRecordingFailed(ILogger logger, string path, Exception exception);
 
     [LoggerMessage(
         EventId = 4012,
         Level = LogLevel.Warning,
         Message = "Nothing was received for {Path}; the recording is discarded")]
-    private static partial void LogRecordingEmpty(ILogger logger, string path);
+    static partial void LogRecordingEmpty(ILogger logger, string path);
 }
