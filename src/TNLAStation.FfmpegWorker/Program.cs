@@ -31,6 +31,11 @@ if (!string.IsNullOrWhiteSpace(epgStationConfigPath))
 }
 
 builder.Services.Configure<FfmpegOptions>(builder.Configuration.GetSection(FfmpegOptions.SectionName));
+builder.Services.PostConfigure<FfmpegOptions>(options =>
+{
+    options.FfmpegPath = ExecutablePathResolver.Resolve(options.FfmpegPath);
+    options.FfprobePath = ExecutablePathResolver.Resolve(options.FfprobePath);
+});
 builder.Services.Configure<MirakurunOptions>(builder.Configuration.GetSection(MirakurunOptions.SectionName));
 
 builder.Services.AddHttpClient<WorkerMirakurunClient>((serviceProvider, client) =>

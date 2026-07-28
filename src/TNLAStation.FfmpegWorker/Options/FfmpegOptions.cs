@@ -4,9 +4,9 @@ public sealed class FfmpegOptions
 {
     public const string SectionName = "Ffmpeg";
 
-    public string FfmpegPath { get; init; } = "ffmpeg";
+    public string FfmpegPath { get; set; } = "ffmpeg";
 
-    public string FfprobePath { get; init; } = "ffprobe";
+    public string FfprobePath { get; set; } = "ffprobe";
 
     /// <summary>
     /// HLS のプレイリスト・セグメントの置き場。backend と同じボリュームを共有し、
