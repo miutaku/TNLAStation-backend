@@ -15,14 +15,14 @@ RUN dotnet restore src/TNLAStation.Api/TNLAStation.Api.csproj \
 FROM restore AS publish
 ARG BUILD_CONFIGURATION=Release
 COPY . .
+# The migrator ships in the same image so schema changes and the code that
+# depends on them are released together, while staying a separate process.
 RUN dotnet publish src/TNLAStation.Api/TNLAStation.Api.csproj \
     --configuration "$BUILD_CONFIGURATION" \
     --no-restore \
     --output /app/publish \
-    /p:UseAppHost=false
-# The migrator ships in the same image so that schema changes and the code that
-# depends on them are always released together, while staying a separate process.
-RUN dotnet publish src/TNLAStation.Migrator/TNLAStation.Migrator.csproj \
+    /p:UseAppHost=false \
+    && dotnet publish src/TNLAStation.Migrator/TNLAStation.Migrator.csproj \
     --configuration "$BUILD_CONFIGURATION" \
     --no-restore \
     --output /app/publish-migrator \
