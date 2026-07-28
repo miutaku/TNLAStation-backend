@@ -189,6 +189,9 @@ dotnet test TNLAStation.sln
 - GitHub Actions の [CI workflow](.github/workflows/ci.yml) では、NuGet restore と依存関係の脆弱性監査、`dotnet format --verify-no-changes`、Release build と xUnit tests、Hadolint による Dockerfile 静的検査、BuildKit による multi-stage container build を順に実行する
   - PostgreSQL service container を常時起動し、DB を使用する結合テストを実行する
 
+リリース方法は [RELEASING.md](RELEASING.md)、開発への参加方法は
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+
 ---
 
 ## ディレクトリ
