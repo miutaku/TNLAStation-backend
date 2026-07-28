@@ -1,0 +1,19 @@
+**
+!Dockerfile
+# The image build must apply the same analyzer configuration as a local build.
+!.editorconfig
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+!src/
+!src/**
+
+src/**/bin/
+src/**/obj/
+src/**/appsettings.*.json
+!src/**/appsettings.json
+
+**/.env
+**/.env.*
+**/*.user
+**/*.suo

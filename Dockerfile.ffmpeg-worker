@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1.7
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS restore
+WORKDIR /src
+
+COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY src/TNLAStation.Domain/TNLAStation.Domain.csproj src/TNLAStation.Domain/
+COPY src/TNLAStation.Application/TNLAStation.Application.csproj src/TNLAStation.Application/
+COPY src/TNLAStation.Infrastructure/TNLAStation.Infrastructure.csproj src/TNLAStation.Infrastructure/
+COPY src/TNLAStation.FfmpegWorker/TNLAStation.FfmpegWorker.csproj src/TNLAStation.FfmpegWorker/
+RUN dotnet restore src/TNLAStation.FfmpegWorker/TNLAStation.FfmpegWorker.csproj
+
+FROM restore AS publish
+ARG BUILD_CONFIGURATION=Release
+COPY src/TNLAStation.Domain/ src/TNLAStation.Domain/
+COPY src/TNLAStation.Application/ src/TNLAStation.Application/
+COPY src/TNLAStation.Infrastructure/ src/TNLAStation.Infrastructure/
+COPY src/TNLAStation.FfmpegWorker/ src/TNLAStation.FfmpegWorker/
+RUN dotnet publish src/TNLAStation.FfmpegWorker/TNLAStation.FfmpegWorker.csproj \
+    --configuration "$BUILD_CONFIGURATION" \
+    --no-restore \
+    --output /app/publish \
+    /p:UseAppHost=false \
+    /p:NoWarn=CA1861
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
+ARG APP_UID=1654
+
+# backend コンテナから ffmpeg/ffprobe を切り出した先。ここにだけ apt で入れる。
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir --parents /var/lib/tnlastation/streamfiles /var/lib/tnlastation/thumbnails /recorded \
+    && chown "$APP_UID:$APP_UID" /var/lib/tnlastation/streamfiles /var/lib/tnlastation/thumbnails /recorded
+
+WORKDIR /app
+COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish/ ./
+
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_HTTP_PORTS=8080 \
+    Ffmpeg__WorkDirectory=/var/lib/tnlastation/streamfiles
+
+EXPOSE 8080
+USER $APP_UID
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
+
+ENTRYPOINT ["dotnet", "TNLAStation.FfmpegWorker.dll"]
