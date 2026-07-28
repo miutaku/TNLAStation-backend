@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using TNLAStation.Application.Abstractions;
 
 namespace TNLAStation.Api.Tests;
 
@@ -145,13 +147,37 @@ public sealed class EpgApiContractTests : IDisposable
     }
 
     [Fact]
-    public async Task ChannelLogoReturnsPngForChannelWithLogoData()
+    public async Task ChannelLogoReturnsThePngBytesTheProviderSupplies()
     {
-        using HttpResponseMessage response = await client.GetAsync($"/api/channels/{SeededChannelId}/logo");
+        byte[] logo = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+        using WebApplicationFactory<Program> configured = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+                services.AddSingleton<IChannelLogoProvider>(new StubChannelLogoProvider(logo))));
+        using HttpClient configuredClient = configured.CreateClient();
+
+        using HttpResponseMessage response = await configuredClient.GetAsync($"/api/channels/{SeededChannelId}/logo");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
         Assert.False(response.Headers.Contains("Cache-Control"));
+        Assert.Equal(logo, await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task ChannelLogoFailsInsteadOfServingAPlaceholderWhenMirakurunIsNotConfigured()
+    {
+        using HttpResponseMessage response = await client.GetAsync($"/api/channels/{SeededChannelId}/logo");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        using JsonDocument document = await ReadJsonAsync(response);
+        Assert.Equal(500, document.RootElement.GetProperty("code").GetInt32());
+        Assert.Equal("MirakurunIsNotConfigured", document.RootElement.GetProperty("errors").GetString());
+    }
+
+    private sealed class StubChannelLogoProvider(byte[] logo) : IChannelLogoProvider
+    {
+        public ValueTask<ReadOnlyMemory<byte>> GetLogoAsync(long channelId, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<ReadOnlyMemory<byte>>(logo);
     }
 
     [Fact]

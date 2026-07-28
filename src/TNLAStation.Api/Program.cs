@@ -23,11 +23,16 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 string? epgStationConfigPath = ResolveEpgStationConfigPath(builder.Configuration, builder.Environment.ContentRootPath);
 if (epgStationConfigPath is not null)
 {
-    builder.Configuration.AddEpgStationConfigFile(epgStationConfigPath);
+    // 場所を明示された config.yml が無いのは設定の誤りなので、黙って既定値へ落とさず止める
+    // (上流の Configuration.readConfig も fatal を出して exit(1) する)。
+    builder.Configuration.AddEpgStationConfigFile(epgStationConfigPath, optional: false);
     // コンテナの内部待受ポートなど、デプロイ環境固有の値は config.yml より環境変数を
     // 優先できるようにする。通常の単体起動では環境変数が無ければ config.yml がそのまま有効。
     builder.Configuration.AddEnvironmentVariables();
     builder.Logging.AddEpgStationLogConfigs(Path.GetDirectoryName(epgStationConfigPath)!);
+
+    // どのファイルを読んだかを起動失敗の案内に載せる。
+    builder.Configuration["EpgStationConfig:LoadedPath"] = epgStationConfigPath;
 }
 
 builder.Services.AddOpenApi(options =>

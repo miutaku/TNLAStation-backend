@@ -35,6 +35,10 @@ public static class InfrastructureServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        // 依存が足りないまま「静かに動かない」構成で起動しないよう、ここで止める。
+        // 縮退運転は AllowDegradedStartup=true を明示した構成でだけ許す。
+        StartupRequirements.Validate(configuration, configuration["EpgStationConfig:LoadedPath"]);
+
         services.TryAddTimeProvider();
         services.Configure<ServerOptions>(configuration.GetSection(ServerOptions.SectionName));
         services.Configure<ApiOptions>(configuration.GetSection(ApiOptions.SectionName));
