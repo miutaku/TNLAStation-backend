@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -99,13 +100,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build container image
         uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
-          push: false
-          tags: tnlastation-backend:ci
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/miutaku/tnlastation-backend:latest
+            ghcr.io/miutaku/tnlastation-backend:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -114,7 +125,9 @@ jobs:
         with:
           context: .
           file: Dockerfile.ffmpeg-worker
-          push: false
-          tags: tnlastation-ffmpeg-worker:ci
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/miutaku/tnlastation-ffmpeg-worker:latest
+            ghcr.io/miutaku/tnlastation-ffmpeg-worker:sha-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
