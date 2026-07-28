@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TNLAStation.Application\TNLAStation.Application.csproj" />
+    <ProjectReference Include="..\TNLAStation.Domain\TNLAStation.Domain.csproj" />
+    <ProjectReference Include="..\TNLAStation.Infrastructure\TNLAStation.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Compatibility\epgstation-api-v2.10.0.json" />
+  </ItemGroup>
+</Project>
