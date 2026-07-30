@@ -13,6 +13,11 @@ namespace TNLAStation.FfmpegWorker.Media;
 /// </summary>
 public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions> options, ProcessGate gate)
 {
+    private const string FfmpegPlaceholder = "__TNLA_FFMPEG__";
+    private const string FfprobePlaceholder = "__TNLA_FFPROBE__";
+    private const string InputPlaceholder = "__TNLA_INPUT__";
+    private const string OutputPlaceholder = "__TNLA_OUTPUT__";
+
     private readonly FfmpegOptions options = options.Value;
 
     /// <param name="command">
@@ -62,7 +67,12 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         }
         else
         {
-            string[] parts = ShellCommandLine.Split(Substitute(command, input, output));
+            string[] parts = SplitCommand(
+                command,
+                input,
+                output,
+                options.FfmpegPath,
+                options.FfprobePath);
             if (parts.Length == 0)
             {
                 return false;
@@ -232,11 +242,28 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         return [.. arguments];
     }
 
-    private string Substitute(string command, string input, string output) => command
-        .Replace("%INPUT%", input, StringComparison.Ordinal)
-        .Replace("%OUTPUT%", output, StringComparison.Ordinal)
-        .Replace("%FFMPEG%", options.FfmpegPath, StringComparison.Ordinal)
-        .Replace("%FFPROBE%", options.FfprobePath, StringComparison.Ordinal);
+    internal static string[] SplitCommand(
+        string command,
+        string input,
+        string output,
+        string ffmpegPath,
+        string ffprobePath)
+    {
+        string protectedCommand = command
+            .Replace("%INPUT%", InputPlaceholder, StringComparison.Ordinal)
+            .Replace("%OUTPUT%", OutputPlaceholder, StringComparison.Ordinal)
+            .Replace("%FFMPEG%", FfmpegPlaceholder, StringComparison.Ordinal)
+            .Replace("%FFPROBE%", FfprobePlaceholder, StringComparison.Ordinal);
+
+        return
+        [
+            .. ShellCommandLine.Split(protectedCommand).Select(part => part
+                .Replace(InputPlaceholder, input, StringComparison.Ordinal)
+                .Replace(OutputPlaceholder, output, StringComparison.Ordinal)
+                .Replace(FfmpegPlaceholder, ffmpegPath, StringComparison.Ordinal)
+                .Replace(FfprobePlaceholder, ffprobePath, StringComparison.Ordinal)),
+        ];
+    }
 
     private static bool TryReadOutTime(string line, out double seconds)
     {

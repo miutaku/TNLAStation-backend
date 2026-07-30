@@ -49,4 +49,36 @@ public sealed class EpgStationStreamCommandTests
         Assert.Contains("12.5", encoded.Arguments);
         Assert.Contains("/recorded/a b.mp4", encoded.Arguments);
     }
+
+    [Fact]
+    public void TransportStreamRemovesSsOptionUsedByShippedConfig()
+    {
+        var options = new FfmpegOptions { FfmpegPath = "ffmpeg", WorkDirectory = "/tmp" };
+
+        ProcessCommand command = EpgStationStreamCommand.Expand(
+            "%FFMPEG% -ss %SS% -i %INPUT% -f hls %OUTPUT%",
+            options,
+            "pipe:0",
+            "/tmp/stream1.m3u8",
+            playPosition: 0,
+            transportStream: true);
+
+        Assert.Equal(["-i", "pipe:0", "-f", "hls", "/tmp/stream1.m3u8"], command.Arguments);
+    }
+
+    [Fact]
+    public void PreservesSpacesInRecordedFilePaths()
+    {
+        var options = new FfmpegOptions { FfmpegPath = "ffmpeg", WorkDirectory = "/work path" };
+
+        ProcessCommand command = EpgStationStreamCommand.Expand(
+            "%FFMPEG% -ss %SS% -i %INPUT% -f hls %OUTPUT%",
+            options,
+            "/recorded/番組 タイトル.mp4",
+            "/work path/stream1.m3u8",
+            playPosition: 12.5);
+
+        Assert.Contains("/recorded/番組 タイトル.mp4", command.Arguments);
+        Assert.Contains("/work path/stream1.m3u8", command.Arguments);
+    }
 }
