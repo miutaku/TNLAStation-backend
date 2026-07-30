@@ -6,8 +6,8 @@ using TNLAStation.FfmpegWorker.Mirakurun;
 using TNLAStation.FfmpegWorker.Options;
 using TNLAStation.FfmpegWorker.Processes;
 using TNLAStation.FfmpegWorker.Streaming;
-using TNLAStation.Infrastructure.DependencyInjection;
 using TNLAStation.Infrastructure.Configuration.EpgStation;
+using TNLAStation.Infrastructure.DependencyInjection;
 using TNLAStation.Infrastructure.Logging;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
