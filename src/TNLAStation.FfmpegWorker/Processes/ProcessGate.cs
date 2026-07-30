@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using TNLAStation.FfmpegWorker.Options;
+using TNLAStation.Infrastructure.Transcoding;
 
 namespace TNLAStation.FfmpegWorker.Processes;
 
@@ -15,43 +16,53 @@ namespace TNLAStation.FfmpegWorker.Processes;
 public sealed class ProcessGate
 {
     private readonly SemaphoreSlim? semaphore;
+    private readonly EncodeDrainState drainState;
 
-    public ProcessGate(IOptions<FfmpegOptions> options)
+    public ProcessGate(IOptions<FfmpegOptions> options, EncodeDrainState drainState)
     {
         int limit = options.Value.EncodeProcessNum;
         semaphore = limit > 0 ? new SemaphoreSlim(limit, limit) : null;
+        this.drainState = drainState;
     }
 
     public async Task<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken)
     {
-        if (semaphore is null)
+        if (!drainState.TryBeginWork())
         {
-            return NullLease.Instance;
+            throw new OperationCanceledException("The worker is draining.", cancellationToken);
         }
 
-        await semaphore.WaitAsync(cancellationToken);
-        return new Lease(semaphore);
+        try
+        {
+            if (semaphore is null)
+            {
+                return new Lease(null, drainState);
+            }
+
+            await semaphore.WaitAsync(cancellationToken);
+            return new Lease(semaphore, drainState);
+        }
+        catch
+        {
+            drainState.EndWork();
+            throw;
+        }
     }
 
-    private sealed class Lease(SemaphoreSlim semaphore) : IAsyncDisposable
+    private sealed class Lease(SemaphoreSlim? semaphore, EncodeDrainState drainState) : IAsyncDisposable
     {
         private int released;
 
         public ValueTask DisposeAsync()
         {
-            if (Interlocked.Exchange(ref released, 1) == 0)
+            if (Interlocked.Exchange(ref released, 1) != 0)
             {
-                semaphore.Release();
+                return ValueTask.CompletedTask;
             }
 
+            semaphore?.Release();
+            drainState.EndWork();
             return ValueTask.CompletedTask;
         }
-    }
-
-    private sealed class NullLease : IAsyncDisposable
-    {
-        public static readonly NullLease Instance = new();
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

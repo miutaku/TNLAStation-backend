@@ -27,6 +27,7 @@ public sealed partial class EncodeWorker(
     IDropLogRepository dropLogs,
     IEncodeExecutor executor,
     ICommandHookRunner hooks,
+    EncodeDrainState drainState,
     IOptions<EncodeOptions> encodeOptions,
     IOptions<CommandHookOptions> commandHookOptions,
     IClientNotifier notifier,
@@ -78,6 +79,11 @@ public sealed partial class EncodeWorker(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!drainState.TryBeginWork())
+            {
+                return;
+            }
+
             try
             {
                 if (!await RunNextAsync(stoppingToken))
@@ -93,6 +99,10 @@ public sealed partial class EncodeWorker(
             {
                 LogEncodeFailed(logger, exception);
                 await Task.Delay(interval, timeProvider, stoppingToken);
+            }
+            finally
+            {
+                drainState.EndWork();
             }
         }
     }

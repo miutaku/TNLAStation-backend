@@ -66,6 +66,7 @@ public sealed class BackgroundServiceResilienceTests
             Unused.Instance,
             Unused.Instance,
             Unused.Instance,
+            new EncodeDrainState(),
             Options.Create(new EncodeOptions { PollIntervalSeconds = 1 }),
             Options.Create(new TNLAStation.Infrastructure.Configuration.CommandHookOptions()),
             NullClientNotifier.Instance,

@@ -65,6 +65,7 @@ public sealed class EncodeWorkerCancellationTests
             store,
             executor,
             new TNLAStation.Infrastructure.CommandHooks.CommandHookRunner(NullLogger<TNLAStation.Infrastructure.CommandHooks.CommandHookRunner>.Instance),
+            new EncodeDrainState(),
             Options.Create(new EncodeOptions { PollIntervalSeconds = 1 }),
             Options.Create(new CommandHookOptions()),
             NullClientNotifier.Instance,

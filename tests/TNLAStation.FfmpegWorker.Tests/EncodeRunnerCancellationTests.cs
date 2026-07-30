@@ -46,7 +46,9 @@ public sealed class EncodeRunnerCancellationTests
             UnixFileMode.UserWrite |
             UnixFileMode.UserExecute);
 
-        var gate = new ProcessGate(Microsoft.Extensions.Options.Options.Create(new FfmpegOptions()));
+        var gate = new ProcessGate(
+            Microsoft.Extensions.Options.Options.Create(new FfmpegOptions()),
+            new TNLAStation.Infrastructure.Transcoding.EncodeDrainState());
         var runner = new EncodeRunner(
             new MediaProbeRunner(Microsoft.Extensions.Options.Options.Create(new FfmpegOptions { FfprobePath = "true" }), gate),
             Microsoft.Extensions.Options.Options.Create(new FfmpegOptions { FfmpegPath = executable }),

@@ -9,6 +9,7 @@ using TNLAStation.FfmpegWorker.Streaming;
 using TNLAStation.Infrastructure.Configuration.EpgStation;
 using TNLAStation.Infrastructure.DependencyInjection;
 using TNLAStation.Infrastructure.Logging;
+using TNLAStation.Infrastructure.Transcoding;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -50,6 +51,7 @@ builder.Services.AddHttpClient<WorkerMirakurunClient>((serviceProvider, client) 
 });
 
 builder.Services.AddSingleton<ProcessGate>();
+builder.Services.AddSingleton<EncodeDrainState>();
 builder.Services.AddSingleton<MediaProbeRunner>();
 builder.Services.AddSingleton<ThumbnailRunner>();
 builder.Services.AddSingleton<EncodeRunner>();
@@ -64,7 +66,15 @@ builder.Services.AddSingleton<TranscodeStreamer>();
 
 WebApplication app = builder.Build();
 
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", (EncodeDrainState drainState) =>
+    drainState.IsDraining
+        ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
+        : Results.Ok(new { status = "ok" }));
+app.MapPost("/internal/drain", async (EncodeDrainState drainState, HttpContext context) =>
+{
+    await drainState.DrainAsync(context.RequestAborted);
+    return Results.Ok(new { status = "drained" });
+});
 app.MapProbeEndpoints();
 app.MapThumbnailEndpoints();
 app.MapEncodeEndpoints();
