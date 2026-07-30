@@ -66,10 +66,15 @@ builder.Services.AddSingleton<TranscodeStreamer>();
 
 WebApplication app = builder.Build();
 
-app.MapGet("/health", (EncodeDrainState drainState) =>
+app.MapGet("/health", (EncodeDrainState drainState, IConfiguration configuration) =>
     drainState.IsDraining
         ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
-        : Results.Ok(new { status = "ok" }));
+        : Results.Ok(new
+        {
+            status = "ok",
+            activeCount = drainState.ActiveCount,
+            nodeName = configuration["Worker:NodeName"],
+        }));
 app.MapPost("/internal/drain", async (EncodeDrainState drainState, HttpContext context) =>
 {
     await drainState.DrainAsync(context.RequestAborted);

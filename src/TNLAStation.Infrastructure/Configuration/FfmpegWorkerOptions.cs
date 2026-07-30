@@ -21,6 +21,9 @@ public sealed class FfmpegWorkerOptions
     /// </summary>
     public List<string> StreamingBaseUrls { get; init; } = [];
 
+    /// <summary>Kubernetes node名ごとの相対処理能力。</summary>
+    public Dictionary<string, double> StreamingNodeWeights { get; init; } = [];
+
     public string ResolveEncodeBaseUrl() =>
         string.IsNullOrWhiteSpace(EncodeBaseUrl) ? BaseUrl : EncodeBaseUrl;
 

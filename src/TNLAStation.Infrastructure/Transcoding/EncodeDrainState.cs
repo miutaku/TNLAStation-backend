@@ -21,6 +21,17 @@ public sealed class EncodeDrainState
         }
     }
 
+    public int ActiveCount
+    {
+        get
+        {
+            lock (gate)
+            {
+                return activeCount;
+            }
+        }
+    }
+
     public bool TryBeginWork()
     {
         lock (gate)

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Streaming;
@@ -11,7 +12,8 @@ public sealed class StreamingWorkerSelectorTests
     public async Task SelectsReadyWorkersInRoundRobinOrder()
     {
         var selector = CreateSelector();
-        using var client = new HttpClient(new HealthHandler(_ => HttpStatusCode.OK));
+        using var client = new HttpClient(new HealthHandler(
+            host => new HealthResult(HttpStatusCode.OK, 0, host)));
 
         Uri? first = await selector.SelectAsync(client, CancellationToken.None);
         Uri? second = await selector.SelectAsync(client, CancellationToken.None);
@@ -27,12 +29,38 @@ public sealed class StreamingWorkerSelectorTests
     {
         var selector = CreateSelector();
         using var client = new HttpClient(new HealthHandler(
-            host => host == "worker-1" ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK));
+            host => new HealthResult(
+                host == "worker-1" ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK,
+                0,
+                host)));
 
         _ = await selector.SelectAsync(client, CancellationToken.None);
         Uri? selected = await selector.SelectAsync(client, CancellationToken.None);
 
         Assert.Equal("worker-2", selected?.Host);
+    }
+
+    [Fact]
+    public async Task SelectsTheNodeWithTheLowestCapacityWeightedLoad()
+    {
+        var selector = new StreamingWorkerSelector(Options.Create(new FfmpegWorkerOptions
+        {
+            StreamingBaseUrls = ["http://worker-0:8080", "http://worker-1:8080"],
+            StreamingNodeWeights =
+            {
+                ["node-5950x"] = 16,
+                ["node-5600x"] = 6,
+            },
+        }));
+        using var client = new HttpClient(new HealthHandler(host => host switch
+        {
+            "worker-0" => new HealthResult(HttpStatusCode.OK, 2, "node-5950x"),
+            _ => new HealthResult(HttpStatusCode.OK, 1, "node-5600x"),
+        }));
+
+        Uri? selected = await selector.SelectAsync(client, CancellationToken.None);
+
+        Assert.Equal("worker-0", selected?.Host);
     }
 
     private static StreamingWorkerSelector CreateSelector() =>
@@ -46,11 +74,24 @@ public sealed class StreamingWorkerSelectorTests
             ],
         }));
 
-    private sealed class HealthHandler(Func<string, HttpStatusCode> status) : HttpMessageHandler
+    private sealed class HealthHandler(Func<string, HealthResult> resultFactory) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
-            CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(status(request.RequestUri!.Host)));
+            CancellationToken cancellationToken)
+        {
+            HealthResult result = resultFactory(request.RequestUri!.Host);
+            return Task.FromResult(new HttpResponseMessage(result.StatusCode)
+            {
+                Content = JsonContent.Create(new
+                {
+                    status = "ok",
+                    activeCount = result.ActiveCount,
+                    nodeName = result.NodeName,
+                }),
+            });
+        }
     }
+
+    private sealed record HealthResult(HttpStatusCode StatusCode, int ActiveCount, string NodeName);
 }
