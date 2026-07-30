@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/miutaku/TNLAStation-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/miutaku/TNLAStation-backend/actions/workflows/ci.yml)
 [![Release](https://github.com/miutaku/TNLAStation-backend/actions/workflows/release.yml/badge.svg)](https://github.com/miutaku/TNLAStation-backend/actions/workflows/release.yml)
-[![GitHub Release](https://img.shields.io/github/v/release/miutaku/TNLAStation-backend)](https://github.com/miutaku/TNLAStation-backend/releases/latest)
-[![License](https://img.shields.io/github/license/miutaku/TNLAStation-backend)](LICENSE)
+[![GitHub Release](https://img.shields.io/github/v/release/miutaku/TNLAStation-backend?cacheSeconds=300)](https://github.com/miutaku/TNLAStation-backend/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [EPGStation](https://github.com/l3tnun/EPGStation) 2.10.0 の公開 Web API を再実装する .NET 10 バックエンドです  
 [TNLAStation Frontend](https://github.com/miutaku/TNLAStation-frontend) など、EPGStation の API 仕様に沿ったクライアントをそのまま接続できます  
