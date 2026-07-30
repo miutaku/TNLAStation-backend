@@ -23,7 +23,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
     /// <param name="command">
     /// 設定されていれば、固定の ffmpeg 引数の代わりにこのコマンドをそのまま実行する
     /// (EPGStation の encode.cmd 相当)。%INPUT%/%OUTPUT%/%FFMPEG%/%FFPROBE% を置換する。
-    /// 進捗 (パーセント) は ffmpeg の -progress 前提のため、このモードでは追わない。
+    /// 実行ファイルが ffmpeg の場合は -progress を自動で追加して進捗を追跡する。
     /// </param>
     /// <param name="rateTimeoutMultiplier">
     /// 録画時間 (秒) にこの値を掛けた時間を超えたら打ち切る (EPGStation の encode.rate 相当)。
@@ -57,8 +57,10 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
             RedirectStandardError = true,
             UseShellExecute = false,
         };
+        bool isFfmpeg;
         if (string.IsNullOrWhiteSpace(command))
         {
+            isFfmpeg = true;
             startInfo.FileName = options.FfmpegPath;
             foreach (string argument in CreateArguments(input, output, arguments))
             {
@@ -78,6 +80,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
                 return false;
             }
 
+            isFfmpeg = PathsReferToSameExecutable(parts[0], options.FfmpegPath);
             startInfo.FileName = parts[0];
             foreach (string argument in parts.Skip(1))
             {
@@ -105,8 +108,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         // ffmpeg は進み具合 (-progress の key=value) と、通常のログを同じ標準エラーへ混ぜて出す。
         // key=value は進捗として扱い、それ以外の行を画面に見せるログとしてためる。ログは
         // 新しい行だけを一定量残し、進捗更新に合わせて間引いて呼び出し側へ渡す。
-        // 任意コマンドのときは -progress を前提にできないので、行はすべてログとして扱う。
-        bool isFfmpeg = string.IsNullOrWhiteSpace(command);
+        // ffmpeg 以外の任意コマンドは -progress を前提にできないので、行をすべてログとして扱う。
         var log = new EncodeLogBuffer();
         int? lastPercent = null;
         long lastFlushStamp = Stopwatch.GetTimestamp();
@@ -255,7 +257,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
             .Replace("%FFMPEG%", FfmpegPlaceholder, StringComparison.Ordinal)
             .Replace("%FFPROBE%", FfprobePlaceholder, StringComparison.Ordinal);
 
-        return
+        string[] parts =
         [
             .. ShellCommandLine.Split(protectedCommand).Select(part => part
                 .Replace(InputPlaceholder, input, StringComparison.Ordinal)
@@ -263,7 +265,22 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
                 .Replace(FfmpegPlaceholder, ffmpegPath, StringComparison.Ordinal)
                 .Replace(FfprobePlaceholder, ffprobePath, StringComparison.Ordinal)),
         ];
+        if (parts.Length == 0 || !PathsReferToSameExecutable(parts[0], ffmpegPath))
+        {
+            return parts;
+        }
+
+        if (parts.Contains("-progress", StringComparer.Ordinal))
+        {
+            return parts;
+        }
+
+        return [parts[0], "-progress", "pipe:2", .. parts[1..]];
     }
+
+    private static bool PathsReferToSameExecutable(string candidate, string ffmpegPath) =>
+        string.Equals(candidate, ffmpegPath, StringComparison.Ordinal) ||
+        string.Equals(Path.GetFileName(candidate), Path.GetFileName(ffmpegPath), StringComparison.Ordinal);
 
     private static bool TryReadOutTime(string line, out double seconds)
     {

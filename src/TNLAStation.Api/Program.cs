@@ -9,6 +9,7 @@ using Microsoft.OpenApi;
 using TNLAStation.Api.Endpoints;
 using TNLAStation.Api.Middleware;
 using TNLAStation.Api.SocketIo;
+using TNLAStation.Api.Streaming;
 using TNLAStation.Application.Abstractions;
 using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Configuration.EpgStation;
@@ -59,6 +60,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddSingleton<SocketIoHub>();
 builder.Services.AddSingleton<IClientNotifier, SocketIoClientNotifier>();
+builder.Services.AddSingleton<StreamRequestDrainState>();
 builder.Services.AddTnlaStationInfrastructure(builder.Configuration);
 
 // socket.io を別ポートで待つ構成 (socketioPort != port) では、その待受も開く。
@@ -155,6 +157,30 @@ if (api.IsAllowAllCors)
 }
 
 app.UseWebSockets();
+app.Use(async (context, next) =>
+{
+    if (!IsDirectStreamRequest(context.Request))
+    {
+        await next(context);
+        return;
+    }
+
+    StreamRequestDrainState drainState = context.RequestServices.GetRequiredService<StreamRequestDrainState>();
+    if (!drainState.TryBegin())
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        return;
+    }
+
+    try
+    {
+        await next(context);
+    }
+    finally
+    {
+        drainState.End();
+    }
+});
 app.UseMiddleware<EpgStationExceptionMiddleware>();
 app.UseMiddleware<OpenApiRequestValidationMiddleware>();
 app.UseMiddleware<OpenApiValidationResponseMiddleware>();
@@ -222,8 +248,29 @@ app.MapThumbnailEndpoints();
 app.MapIptvEndpoints();
 app.MapDropLogEndpoints();
 app.MapStreamEndpoints();
+app.MapGet("/internal/health", (StreamRequestDrainState drainState) =>
+    drainState.IsDraining
+        ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
+        : Results.Ok(new { status = "ok" }));
+app.MapPost("/internal/drain", async (StreamRequestDrainState drainState, HttpContext context) =>
+{
+    await drainState.DrainAsync(context.RequestAborted);
+    return Results.Ok(new { status = "drained" });
+});
 
 app.Run();
+
+static bool IsDirectStreamRequest(HttpRequest request)
+{
+    if (!HttpMethods.IsGet(request.Method) ||
+        !request.Path.StartsWithSegments("/api/streams", StringComparison.OrdinalIgnoreCase))
+    {
+        return false;
+    }
+
+    string extension = request.Path.Value?.Split('/').LastOrDefault() ?? string.Empty;
+    return extension is "m2ts" or "m2tsll" or "mp4" or "webm";
+}
 
 static void ConfigureHttps(
     Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen,

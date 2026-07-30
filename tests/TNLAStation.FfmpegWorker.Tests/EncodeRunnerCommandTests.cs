@@ -17,6 +17,8 @@ public sealed class EncodeRunnerCommandTests
         Assert.Equal(
             [
                 "/usr/bin/ffmpeg",
+                "-progress",
+                "pipe:2",
                 "-i",
                 "/recorded/番組 タイトル.m2ts",
                 "-y",
@@ -36,7 +38,7 @@ public sealed class EncodeRunnerCommandTests
             "/opt/ffmpeg tools/ffprobe");
 
         Assert.Equal("/opt/ffmpeg tools/ffmpeg", command[0]);
-        Assert.Equal("/recorded/番組 タイトル.m2ts", command[2]);
-        Assert.Equal("/recorded/番組 タイトル.mp4", command[4]);
+        Assert.Equal("/recorded/番組 タイトル.m2ts", command[4]);
+        Assert.Equal("/recorded/番組 タイトル.mp4", command[6]);
     }
 }
