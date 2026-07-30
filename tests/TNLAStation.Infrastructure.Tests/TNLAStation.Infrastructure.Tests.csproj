@@ -15,4 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TNLAStation.Infrastructure\TNLAStation.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Fixtures\config.yml.example" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

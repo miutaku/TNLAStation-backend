@@ -158,7 +158,13 @@ public sealed class StartupRequirementsTests
             directory = directory.Parent;
         }
 
+        string fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "config.yml.example");
+        if (File.Exists(fixture))
+        {
+            return fixture;
+        }
+
         throw new FileNotFoundException(
-            "TNLAStation/config/config.yml.example が見つかりません。配布している例が消えていないか確認してください。");
+            "TNLAStation/config/config.yml.example とテスト用フィクスチャのどちらも見つかりません。");
     }
 }
