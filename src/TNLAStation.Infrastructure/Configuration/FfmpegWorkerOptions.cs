@@ -16,6 +16,11 @@ public sealed class FfmpegWorkerOptions
     /// <summary>ライブ・録画streamを変換するworker pool。</summary>
     public string? StreamingBaseUrl { get; init; }
 
+    /// <summary>
+    /// ストリーミングworkerの個別URL。指定時はreadyな接続先を開始要求ごとに巡回する。
+    /// </summary>
+    public List<string> StreamingBaseUrls { get; init; } = [];
+
     public string ResolveEncodeBaseUrl() =>
         string.IsNullOrWhiteSpace(EncodeBaseUrl) ? BaseUrl : EncodeBaseUrl;
 

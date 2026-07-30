@@ -68,6 +68,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
         services.AddHttpClient(FfmpegStreamingWorkerClientName, ConfigureStreamingWorkerClient);
+        services.AddSingleton<StreamingWorkerSelector>();
         services.AddHttpClient<IMediaProbe, RemoteMediaProbe>(ConfigureEncodeWorkerClient);
         services.AddSingleton<IRecordingJobRegistry, RecordingJobRegistry>();
         services.AddSingleton<RecordingScheduleSignal>();
@@ -260,6 +261,7 @@ public static class InfrastructureServiceCollectionExtensions
         // 配信がもう片方の一覧に出てこなくなる。
         services.AddSingleton(provider => new RemoteLiveStreamService(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient(FfmpegStreamingWorkerClientName),
+            provider.GetRequiredService<StreamingWorkerSelector>(),
             provider.GetRequiredService<IMirakurunClient>(),
             provider.GetRequiredService<IEpgRepository>(),
             provider.GetRequiredService<IVideoFileRepository>(),

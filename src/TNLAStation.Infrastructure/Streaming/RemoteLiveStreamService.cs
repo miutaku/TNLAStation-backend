@@ -26,6 +26,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     private readonly object reaperGate = new();
     private readonly SemaphoreSlim startGate = new(1, 1);
     private readonly HttpClient worker;
+    private readonly StreamingWorkerSelector workerSelector;
     private readonly IMirakurunClient mirakurun;
     private readonly IEpgRepository epg;
     private readonly IVideoFileRepository videoFiles;
@@ -41,6 +42,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
 
     public RemoteLiveStreamService(
         HttpClient worker,
+        StreamingWorkerSelector workerSelector,
         IMirakurunClient mirakurun,
         IEpgRepository epg,
         IVideoFileRepository videoFiles,
@@ -53,6 +55,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         ArgumentNullException.ThrowIfNull(options);
 
         this.worker = worker;
+        this.workerSelector = workerSelector;
         this.mirakurun = mirakurun;
         this.epg = epg;
         this.videoFiles = videoFiles;
@@ -88,8 +91,9 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
             sessions[streamId] = record;
 
+            Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
             using HttpResponseMessage response = await worker.PostAsJsonAsync(
-                "streams/hls/live",
+                new Uri(workerBaseAddress, "streams/hls/live"),
                 new HlsLiveStartRequest(streamId, channelId, quality.Height, quality.VideoBitrate, quality.AudioBitrate, options.SegmentSeconds, mirakurunOptions.StreamingPriority, streamCommand.Cmd),
                 JsonOptions,
                 cancellationToken);
@@ -149,8 +153,9 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             var record = new SessionRecord(streamId, channelId: 0, file.Name, mode, videoFileId, timeProvider.GetUtcNow());
             sessions[streamId] = record;
 
+            Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
             using HttpResponseMessage response = await worker.PostAsJsonAsync(
-                "streams/hls/recorded",
+                new Uri(workerBaseAddress, "streams/hls/recorded"),
                 new HlsRecordedStartRequest(streamId, file.FullPath, quality.Height, quality.VideoBitrate, quality.AudioBitrate, options.SegmentSeconds, playPosition, command, IsTransportStream(file.Type)),
                 JsonOptions,
                 cancellationToken);
@@ -236,6 +241,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 new TranscodeLiveRequest(channelId, quality.Height, quality.VideoBitrate, quality.AudioBitrate, output.Arguments, mirakurunOptions.StreamingPriority, streamCommand.Cmd),
                 options: JsonOptions),
         };
+        request.RequestUri = new Uri(await SelectWorkerAsync(cancellationToken), "streams/transcode/live");
         HttpResponseMessage response = await worker.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         try
         {
@@ -274,6 +280,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 new TranscodeRecordedRequest(file.FullPath, quality.Height, quality.VideoBitrate, quality.AudioBitrate, output.Arguments, playPosition, command, IsTransportStream(file.Type)),
                 options: JsonOptions),
         };
+        request.RequestUri = new Uri(await SelectWorkerAsync(cancellationToken), "streams/transcode/recorded");
         HttpResponseMessage response = await worker.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         try
         {
@@ -614,6 +621,10 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             ? new Uri(relativePath, UriKind.Relative)
             : new Uri(session.WorkerBaseAddress, relativePath);
     }
+
+    private async Task<Uri> SelectWorkerAsync(CancellationToken cancellationToken) =>
+        await workerSelector.SelectAsync(worker, cancellationToken)
+        ?? throw new LiveStreamException("StreamProcessStartFailed");
 
     private sealed class SessionRecord
     {
