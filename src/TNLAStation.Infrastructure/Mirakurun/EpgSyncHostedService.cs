@@ -20,6 +20,12 @@ public sealed partial class EpgSyncHostedService(
     TimeProvider timeProvider,
     ILogger<EpgSyncHostedService> logger) : BackgroundService
 {
+    private static readonly Action<ILogger, Exception?> ReserveGenerationFailedLog =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(2006),
+            "EPG was updated, but reserves could not be regenerated immediately.");
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = false
@@ -201,20 +207,41 @@ public sealed partial class EpgSyncHostedService(
 
         var upserts = new List<EpgProgram>();
         var deletes = new List<long>();
+        Dictionary<long, EpgProgram>? programsWithScheduleContext = null;
+        if (state.PendingPrograms.Values.Any(change => change.Program is { Duration: <= 1 }))
+        {
+            // 終了時刻未定 (duration=1ms) は、その番組だけでは暫定終了時刻を決められない。
+            // 単発イベントを「現在時刻+猶予」で写すと、次番組の正式な開始時刻より短い値で
+            // 一時上書きしてしまうため、同じ時点の番組表全体から次番組を参照して変換する。
+            IReadOnlyList<MirakurunProgramDto> allPrograms = await client.GetProgramsAsync(cancellationToken);
+            programsWithScheduleContext = mapper.MapPrograms(
+                    allPrograms,
+                    state.ChannelIndex,
+                    now)
+                .ToDictionary(program => program.Id);
+        }
+
         foreach (PendingProgramChange change in state.PendingPrograms.Values)
         {
             if (change.DeleteId is not null)
             {
                 deletes.Add(change.DeleteId.Value);
+                continue;
             }
-            else if (change.Program is not null)
+
+            if (change.Program is null)
             {
-                EpgProgram? program = mapper.MapProgram(change.Program, state.ChannelIndex, now);
-                if (program is not null)
-                {
-                    upserts.Add(program);
-                }
+                continue;
             }
+
+            EpgProgram? program = programsWithScheduleContext?.GetValueOrDefault(change.Program.Id)
+                ?? mapper.MapProgram(change.Program, state.ChannelIndex, now);
+            if (program is null)
+            {
+                continue;
+            }
+
+            upserts.Add(program);
         }
 
         await store.ApplyChangesAsync(
@@ -356,11 +383,8 @@ public sealed partial class EpgSyncHostedService(
         Message = "Committed Mirakurun EPG snapshot with {ChannelCount} channels and {ProgramCount} programs.")]
     private static partial void LogSnapshotCommitted(ILogger logger, int channelCount, int programCount);
 
-    [LoggerMessage(
-        EventId = 2006,
-        Level = LogLevel.Error,
-        Message = "EPG was updated, but reserves could not be regenerated immediately.")]
-    private static partial void LogReserveGenerationFailed(ILogger logger, Exception exception);
+    private static void LogReserveGenerationFailed(ILogger logger, Exception exception) =>
+        ReserveGenerationFailedLog(logger, exception);
 
     private TimeSpan GetUpdateInterval() =>
         TimeSpan.FromMinutes(Math.Max(1, epgOptions.UpdateIntervalMinutes));
