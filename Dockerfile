@@ -14,6 +14,7 @@ RUN dotnet restore src/TNLAStation.Api/TNLAStation.Api.csproj \
 
 FROM restore AS publish
 ARG BUILD_CONFIGURATION=Release
+ARG VERSION=1.0.0
 COPY . .
 # The migrator ships in the same image so schema changes and the code that
 # depends on them are released together, while staying a separate process.
@@ -22,11 +23,13 @@ RUN dotnet publish src/TNLAStation.Api/TNLAStation.Api.csproj \
     --no-restore \
     --output /app/publish \
     /p:UseAppHost=false \
+    /p:Version="$VERSION" \
     && dotnet publish src/TNLAStation.Migrator/TNLAStation.Migrator.csproj \
     --configuration "$BUILD_CONFIGURATION" \
     --no-restore \
     --output /app/publish-migrator \
-    /p:UseAppHost=false
+    /p:UseAppHost=false \
+    /p:Version="$VERSION"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
 ARG APP_UID=1654

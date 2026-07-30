@@ -135,6 +135,7 @@ public sealed class ApiContractTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertNoCache(response);
+        Assert.Equal("1.0.0", response.Headers.GetValues("X-TNLAStation-Version").Single());
         using JsonDocument document = await ReadJsonAsync(response);
         Assert.Equal("2.10.0", document.RootElement.GetProperty("version").GetString());
         Assert.Single(document.RootElement.EnumerateObject());

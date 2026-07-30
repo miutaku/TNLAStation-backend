@@ -266,10 +266,14 @@ internal static class EpgStationEndpoints
     }
 
     private static async Task<IResult> GetVersionAsync(
+        HttpContext context,
         IVersionRepository repository,
         CancellationToken cancellationToken)
     {
         string version = await repository.GetAsync(cancellationToken);
+        Version? assemblyVersion = typeof(EpgStationEndpoints).Assembly.GetName().Version;
+        context.Response.Headers["X-TNLAStation-Version"] =
+            assemblyVersion is null ? "unknown" : assemblyVersion.ToString(3);
         return Results.Ok(new VersionResponse(version));
     }
 }

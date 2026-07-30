@@ -102,6 +102,8 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          build-args: |
+            VERSION=${{ steps.backend.outputs.version }}
           push: true
           tags: ${{ steps.backend.outputs.tags }}
           labels: ${{ steps.backend.outputs.labels }}

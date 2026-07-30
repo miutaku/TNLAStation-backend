@@ -147,7 +147,11 @@ if (!string.IsNullOrWhiteSpace(api.SubDirectory))
 
 if (api.IsAllowAllCors)
 {
-    app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    app.UseCors(policy => policy
+        .AllowAnyOrigin()
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .WithExposedHeaders("X-TNLAStation-Version"));
 }
 
 app.UseWebSockets();
