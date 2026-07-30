@@ -15,6 +15,12 @@ public sealed class FfmpegOptions
     public string WorkDirectory { get; init; } = "/var/lib/tnlastation/streamfiles";
 
     /// <summary>
+    /// backendがHLS sessionのstatus・停止要求を同じPodへ返すための到達可能なURL。
+    /// 複数workerで配信するときだけ指定し、単一workerでは空のままでよい。
+    /// </summary>
+    public string? PublicBaseUrl { get; init; }
+
+    /// <summary>
     /// エンコード・サムネイル抽出・probe・HLS/変換配信で同時に起動する ffmpeg/ffprobe
     /// プロセス数の上限 (EPGStation の encodeProcessNum 相当)。0 で無制限。
     /// </summary>

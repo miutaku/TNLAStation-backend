@@ -42,6 +42,8 @@ public sealed record HlsRecordedStartRequest(
 
 public sealed record HlsStatusResponse(bool Found, bool IsRunning, string? LastError);
 
+public sealed record HlsStartResponse(string? WorkerBaseUrl);
+
 public sealed record TranscodeLiveRequest(
     long ChannelId,
     int Height,

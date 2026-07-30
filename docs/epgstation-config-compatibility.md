@@ -77,7 +77,9 @@ EPGStationの`config.yml`にない運用設定は、ASP.NET Core形式の環境�
 
 | 環境変数 | 内容 |
 | --- | --- |
-| `FfmpegWorker__BaseUrl` | FFmpeg WorkerのURL |
+| `FfmpegWorker__BaseUrl` | FFmpeg Workerの共通URL（用途別URL未指定時のfallback） |
+| `FfmpegWorker__EncodeBaseUrl` | probe、thumbnail用Worker poolのURL。録画TSエンコードjobはWorkerがPostgreSQLから取得する |
+| `FfmpegWorker__StreamingBaseUrl` | ライブ・録画視聴用Worker poolのURL |
 | `ConnectionStrings__PostgreSQL` | PostgreSQL connection string |
 | `Streaming__IdleTimeoutSeconds` | keepが途切れたstreamを終了するまでの秒数 |
 | `Streaming__SegmentSeconds` | HLS segment長 |

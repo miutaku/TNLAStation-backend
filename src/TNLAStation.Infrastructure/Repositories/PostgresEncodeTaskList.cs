@@ -10,7 +10,6 @@ namespace TNLAStation.Infrastructure.Repositories;
 public sealed class PostgresEncodeTaskList(
     IDbContextFactory<EpgDbContext> contextFactory,
     IRecordedItemRepository recorded,
-    IEncodeJobRegistry jobRegistry,
     TimeProvider timeProvider) : IEncodeTaskList, IEncodeQueueRepository
 {
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(15);
@@ -37,6 +36,7 @@ public sealed class PostgresEncodeTaskList(
             Directory = request.Directory,
             RemoveOriginal = request.RemoveOriginal,
             Status = "waiting",
+            CancelRequested = false,
             CreatedAt = timeProvider.GetUtcNow(),
         };
         context.EncodeTasks.Add(entity);
@@ -66,30 +66,32 @@ public sealed class PostgresEncodeTaskList(
 
     public async ValueTask<bool> CancelAsync(long encodeId, CancellationToken cancellationToken)
     {
-        // DB が遅いときも先にプロセスへ停止を伝える。削除との間にワーカーが登録される
-        // 競合もあるため、削除後にもう一度確認する。
-        Task? stopped = jobRegistry.RequestCancel(encodeId);
-
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        int removed = await context.EncodeTasks
-            .Where(task => task.Id == encodeId)
+        int waitingRemoved = await context.EncodeTasks
+            .Where(task => task.Id == encodeId && task.Status == "waiting")
             .ExecuteDeleteAsync(cancellationToken);
-
-        stopped ??= jobRegistry.RequestCancel(encodeId);
-        if (stopped is not null)
+        if (waitingRemoved == 1)
         {
-            // 204 を返した後も ffmpeg が走り続けないよう、ワーカーがプロセスツリーと
-            // 中間ファイルを片付けるまで待つ。
-            await stopped.WaitAsync(StopTimeout, cancellationToken);
+            return true;
         }
 
-        return removed > 0;
+        int requested = await context.EncodeTasks
+            .Where(task => task.Id == encodeId && task.Status == "running")
+            .ExecuteUpdateAsync(
+                update => update.SetProperty(task => task.CancelRequested, true),
+                cancellationToken);
+        if (requested != 1)
+        {
+            return false;
+        }
+
+        await WaitForWorkerStopAsync([encodeId], cancellationToken);
+        return true;
     }
 
     public async ValueTask<int> CancelForRecordedAsync(long recordedId, CancellationToken cancellationToken)
     {
         long[] ids;
-        var stopped = new HashSet<Task>();
         await using (EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken))
         {
             ids = await context.EncodeTasks
@@ -97,33 +99,54 @@ public sealed class PostgresEncodeTaskList(
                 .Select(task => task.Id)
                 .ToArrayAsync(cancellationToken);
 
-            foreach (long id in ids)
-            {
-                if (jobRegistry.RequestCancel(id) is { } completion)
-                {
-                    stopped.Add(completion);
-                }
-            }
-
             await context.EncodeTasks
-                .Where(task => task.RecordedId == recordedId)
+                .Where(task => task.RecordedId == recordedId && task.Status == "waiting")
                 .ExecuteDeleteAsync(cancellationToken);
+            await context.EncodeTasks
+                .Where(task => task.RecordedId == recordedId && task.Status == "running")
+                .ExecuteUpdateAsync(
+                    update => update.SetProperty(task => task.CancelRequested, true),
+                    cancellationToken);
         }
 
-        foreach (long id in ids)
+        await WaitForWorkerStopAsync(ids, cancellationToken);
+        return ids.Length;
+    }
+
+    private async Task WaitForWorkerStopAsync(
+        long[] ids,
+        CancellationToken cancellationToken)
+    {
+        if (ids.Length == 0)
         {
-            if (jobRegistry.RequestCancel(id) is { } completion)
+            return;
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(StopTimeout);
+        try
+        {
+            while (true)
             {
-                stopped.Add(completion);
+                await using EpgDbContext context = await contextFactory.CreateDbContextAsync(timeout.Token);
+                bool exists = await context.EncodeTasks.AnyAsync(
+                    task => ids.Contains(task.Id),
+                    timeout.Token);
+                if (!exists)
+                {
+                    return;
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(200), timeProvider, timeout.Token);
             }
         }
-
-        if (stopped.Count > 0)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            await Task.WhenAll(stopped).WaitAsync(StopTimeout, cancellationToken);
+            await using EpgDbContext context = await contextFactory.CreateDbContextAsync(CancellationToken.None);
+            await context.EncodeTasks
+                .Where(task => ids.Contains(task.Id) && task.CancelRequested)
+                .ExecuteDeleteAsync(CancellationToken.None);
         }
-
-        return ids.Length;
     }
 
     /// <summary>

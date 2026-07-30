@@ -1,10 +1,12 @@
 using Microsoft.Extensions.Options;
+using TNLAStation.Application.Abstractions;
 using TNLAStation.FfmpegWorker.Endpoints;
 using TNLAStation.FfmpegWorker.Media;
 using TNLAStation.FfmpegWorker.Mirakurun;
 using TNLAStation.FfmpegWorker.Options;
 using TNLAStation.FfmpegWorker.Processes;
 using TNLAStation.FfmpegWorker.Streaming;
+using TNLAStation.Infrastructure.DependencyInjection;
 using TNLAStation.Infrastructure.Configuration.EpgStation;
 using TNLAStation.Infrastructure.Logging;
 
@@ -51,6 +53,12 @@ builder.Services.AddSingleton<ProcessGate>();
 builder.Services.AddSingleton<MediaProbeRunner>();
 builder.Services.AddSingleton<ThumbnailRunner>();
 builder.Services.AddSingleton<EncodeRunner>();
+if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("PostgreSQL")))
+{
+    builder.Services.AddSingleton<IEncodeExecutor, LocalEncodeExecutor>();
+    builder.Services.AddTnlaStationEncodeWorker(builder.Configuration);
+}
+
 builder.Services.AddSingleton<HlsSessionRegistry>();
 builder.Services.AddSingleton<TranscodeStreamer>();
 

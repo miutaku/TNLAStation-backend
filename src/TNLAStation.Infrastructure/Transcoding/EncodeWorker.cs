@@ -29,8 +29,6 @@ public sealed partial class EncodeWorker(
     ICommandHookRunner hooks,
     IOptions<EncodeOptions> encodeOptions,
     IOptions<CommandHookOptions> commandHookOptions,
-    IRecordingLeaseProvider leaseProvider,
-    IEncodeJobRegistry jobRegistry,
     IClientNotifier notifier,
     TimeProvider timeProvider,
     ILogger<EncodeWorker> logger) : BackgroundService
@@ -68,26 +66,6 @@ public sealed partial class EncodeWorker(
     {
         TimeSpan interval = TimeSpan.FromSeconds(Math.Max(1, options.PollIntervalSeconds));
 
-        // 前回の実行中を待ちへ戻すのは 1 度きり。ただし起動時に DB が落ちていると失敗するので、
-        // 成功するまで試みる。ここで落ちて諦めると、二度とエンコードが動かなくなる。
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await ResetRunningTasksAsync(stoppingToken);
-                break;
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception exception)
-            {
-                LogEncodeFailed(logger, exception);
-                await Task.Delay(interval, timeProvider, stoppingToken);
-            }
-        }
-
         // 「waiting」の取り出しは RunNextAsync 内の条件付き UPDATE で線形化されるので、
         // このループを複数本並べても同じ行を二重に掴むことはない。
         int concurrency = Math.Max(1, options.ConcurrentEncodeNum);
@@ -117,26 +95,17 @@ public sealed partial class EncodeWorker(
         }
     }
 
-    /// <summary>
-    /// 前回落ちたときに実行中だった行を待ちへ戻す。実行中のまま残すと、二度と取り出されない。
-    /// </summary>
-    private async Task ResetRunningTasksAsync(CancellationToken cancellationToken)
-    {
-        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await context.EncodeTasks
-            .Where(task => task.Status == "running")
-            .ExecuteUpdateAsync(
-                task => task.SetProperty(x => x.Status, "waiting").SetProperty(x => x.Percent, (int?)null).SetProperty(x => x.Log, (string?)null),
-                cancellationToken);
-    }
-
     private async Task<bool> RunNextAsync(CancellationToken stoppingToken)
     {
+        DateTimeOffset now = timeProvider.GetUtcNow();
         EncodeTaskEntity? task;
         await using (EpgDbContext selectContext = await contextFactory.CreateDbContextAsync(stoppingToken))
         {
             task = await selectContext.EncodeTasks.AsNoTracking()
-                .Where(item => item.Status == "waiting")
+                .Where(item =>
+                    !item.CancelRequested &&
+                    (item.Status == "waiting" ||
+                     (item.Status == "running" && item.LeaseExpiresAt < now)))
                 .OrderBy(item => item.Id)
                 .FirstOrDefaultAsync(stoppingToken);
         }
@@ -146,49 +115,56 @@ public sealed partial class EncodeWorker(
             return false;
         }
 
-        // 選んだ直後から、ffprobe・ffmpeg・DB への完了登録までを 1 つのジョブとして
-        // 公開する。DELETE がこの登録より先なら、下の条件付き UPDATE が 0 件になり
-        // 実行しない。登録より後なら jobToken が止まる。
-        using var jobCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        using IDisposable registration = jobRegistry.Register(task.Id, jobCancellation);
-        CancellationToken jobToken = jobCancellation.Token;
+        Guid claimId = Guid.NewGuid();
 
         try
         {
-            await using (EpgDbContext claimContext = await contextFactory.CreateDbContextAsync(jobToken))
+            await using (EpgDbContext claimContext = await contextFactory.CreateDbContextAsync(stoppingToken))
             {
                 int claimed = await claimContext.EncodeTasks
-                    .Where(item => item.Id == task.Id && item.Status == "waiting")
+                    .Where(item =>
+                        item.Id == task.Id &&
+                        !item.CancelRequested &&
+                        (item.Status == "waiting" ||
+                         (item.Status == "running" && item.LeaseExpiresAt < now)))
                     .ExecuteUpdateAsync(
-                        update => update.SetProperty(item => item.Status, "running"),
-                        jobToken);
+                        update => update
+                            .SetProperty(item => item.Status, "running")
+                            .SetProperty(item => item.ClaimId, claimId)
+                            .SetProperty(item => item.LeaseExpiresAt, now.AddSeconds(30))
+                            .SetProperty(item => item.Percent, (int?)null)
+                            .SetProperty(item => item.Log, (string?)null),
+                        stoppingToken);
                 if (claimed != 1)
                 {
                     return true;
                 }
             }
 
-            await using IAsyncDisposable? lease = await leaseProvider.TryAcquireAsync(jobToken);
-            await EncodeAsync(task, jobToken);
+            await EncodeAsync(task, claimId, stoppingToken);
         }
-        catch (OperationCanceledException) when (
-            jobToken.IsCancellationRequested &&
-            !stoppingToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
         {
-            // 利用者による取り消し。待ち行列側も削除するが、競合して先にこちらへ
-            // 届く場合があるため冪等に掃除する。
-            await RemoveTaskAsync(task.Id, CancellationToken.None);
+            await RemoveClaimedTaskAsync(task.Id, claimId, CancellationToken.None);
+        }
+        catch
+        {
+            await ReleaseClaimAsync(task.Id, claimId, CancellationToken.None);
+            throw;
         }
 
         return true;
     }
 
-    private async Task EncodeAsync(EncodeTaskEntity task, CancellationToken cancellationToken)
+    private async Task EncodeAsync(
+        EncodeTaskEntity task,
+        Guid claimId,
+        CancellationToken cancellationToken)
     {
         VideoFileLocation? source = await videoFiles.GetAsync(task.SourceVideoFileId, cancellationToken);
         if (source is null || !File.Exists(source.FullPath))
         {
-            await RemoveTaskAsync(task.Id, cancellationToken);
+            await RemoveClaimedTaskAsync(task.Id, claimId, cancellationToken);
             return;
         }
 
@@ -204,7 +180,7 @@ public sealed partial class EncodeWorker(
         string output = Path.Combine(directory, filename);
         string partial = Path.Combine(
             directory,
-            $"{Path.GetFileNameWithoutExtension(source.Filename)}-{mode.Name}.part{mode.Extension}");
+            $"{Path.GetFileNameWithoutExtension(source.Filename)}-{mode.Name}.{claimId:N}.part{mode.Extension}");
 
         RecordedProgram? recordedInfo = await recordedItems.GetAsync(task.RecordedId, cancellationToken);
         EpgChannel? channel = recordedInfo is null
@@ -219,14 +195,13 @@ public sealed partial class EncodeWorker(
         bool succeeded;
         try
         {
-            succeeded = await executor.RunAsync(
+            succeeded = await RunWithLeaseAsync(
+                task.Id,
+                claimId,
                 source.FullPath,
                 partial,
-                mode.Arguments,
-                mode.Command,
-                mode.RateTimeoutMultiplier,
+                mode,
                 environmentVariables,
-                onProgress: (percent, log, ct) => PersistProgressAsync(task.Id, percent, log, ct),
                 cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
         }
@@ -240,7 +215,7 @@ public sealed partial class EncodeWorker(
         {
             // 中途半端なファイルを残すと、再生できないものが一覧に並ぶ。
             TryDelete(partial);
-            await RemoveTaskAsync(task.Id, cancellationToken);
+            await RemoveClaimedTaskAsync(task.Id, claimId, cancellationToken);
             return;
         }
 
@@ -257,7 +232,7 @@ public sealed partial class EncodeWorker(
         long? videoFileId;
         try
         {
-            videoFileId = await TryCommitAsync(task, directory, filename, mode, cancellationToken);
+            videoFileId = await TryCommitAsync(task, claimId, directory, filename, mode, cancellationToken);
         }
         catch
         {
@@ -354,6 +329,7 @@ public sealed partial class EncodeWorker(
     /// <summary>戻り値は確定した VideoFile の id。キャンセル側が先に行を消していれば null。</summary>
     private async Task<long?> TryCommitAsync(
         EncodeTaskEntity task,
+        Guid claimId,
         string directory,
         string filename,
         EncodeModeOptions mode,
@@ -366,7 +342,7 @@ public sealed partial class EncodeWorker(
         // この DELETE がキャンセルとの線形化点。キャンセル側が先に消していれば、
         // VideoFile は追加しない。こちらが先なら、ファイル登録と同じ transaction で確定する。
         int claimed = await context.EncodeTasks
-            .Where(item => item.Id == task.Id)
+            .Where(item => item.Id == task.Id && item.ClaimId == claimId)
             .ExecuteDeleteAsync(cancellationToken);
         if (claimed != 1)
         {
@@ -389,20 +365,117 @@ public sealed partial class EncodeWorker(
         return videoFile.Id;
     }
 
-    private async Task PersistProgressAsync(long taskId, int? percent, string? log, CancellationToken cancellationToken)
+    private async Task<bool> RunWithLeaseAsync(
+        long taskId,
+        Guid claimId,
+        string input,
+        string output,
+        EncodeModeOptions mode,
+        IReadOnlyDictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
+    {
+        using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task heartbeat = MaintainLeaseAsync(taskId, claimId, leaseCancellation);
+        try
+        {
+            return await executor.RunAsync(
+                input,
+                output,
+                mode.Arguments,
+                mode.Command,
+                mode.RateTimeoutMultiplier,
+                environmentVariables,
+                onProgress: (percent, log, ct) =>
+                    PersistProgressAsync(taskId, claimId, percent, log, ct),
+                leaseCancellation.Token);
+        }
+        finally
+        {
+            await leaseCancellation.CancelAsync();
+            await heartbeat;
+        }
+    }
+
+    private async Task MaintainLeaseAsync(
+        long taskId,
+        Guid claimId,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            while (!cancellation.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(10), timeProvider, cancellation.Token);
+                await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellation.Token);
+                DateTimeOffset expiresAt = timeProvider.GetUtcNow().AddSeconds(30);
+                int renewed = await context.EncodeTasks
+                    .Where(task =>
+                        task.Id == taskId &&
+                        task.ClaimId == claimId &&
+                        !task.CancelRequested)
+                    .ExecuteUpdateAsync(
+                        update => update.SetProperty(task => task.LeaseExpiresAt, expiresAt),
+                        cancellation.Token);
+                if (renewed == 1)
+                {
+                    continue;
+                }
+
+                await cancellation.CancelAsync();
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        catch
+        {
+            // DBへleaseを更新できないWorkerは実行権を証明できない。重複実行を避けるため止める。
+            await cancellation.CancelAsync();
+        }
+    }
+
+    private async Task PersistProgressAsync(
+        long taskId,
+        Guid claimId,
+        int? percent,
+        string? log,
+        CancellationToken cancellationToken)
     {
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         await context.EncodeTasks
-            .Where(task => task.Id == taskId)
+            .Where(task => task.Id == taskId && task.ClaimId == claimId)
             .ExecuteUpdateAsync(
                 task => task.SetProperty(x => x.Percent, percent).SetProperty(x => x.Log, log),
                 cancellationToken);
     }
 
-    private async Task RemoveTaskAsync(long taskId, CancellationToken cancellationToken)
+    private async Task ReleaseClaimAsync(
+        long taskId,
+        Guid claimId,
+        CancellationToken cancellationToken)
     {
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        await context.EncodeTasks.Where(task => task.Id == taskId).ExecuteDeleteAsync(cancellationToken);
+        await context.EncodeTasks
+            .Where(task => task.Id == taskId && task.ClaimId == claimId)
+            .ExecuteUpdateAsync(
+                update => update
+                    .SetProperty(task => task.Status, "waiting")
+                    .SetProperty(task => task.ClaimId, (Guid?)null)
+                    .SetProperty(task => task.LeaseExpiresAt, (DateTimeOffset?)null),
+                cancellationToken);
+    }
+
+    private async Task RemoveClaimedTaskAsync(
+        long taskId,
+        Guid claimId,
+        CancellationToken cancellationToken)
+    {
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await context.EncodeTasks
+            .Where(task => task.Id == taskId && task.ClaimId == claimId)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     private EncodeModeOptions ResolveMode(string name)

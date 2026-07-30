@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using TNLAStation.FfmpegWorker.Contracts;
+using TNLAStation.FfmpegWorker.Options;
 using TNLAStation.FfmpegWorker.Streaming;
 
 namespace TNLAStation.FfmpegWorker.Endpoints;
@@ -7,7 +9,11 @@ public static class StreamEndpoints
 {
     public static void MapStreamEndpoints(this WebApplication app)
     {
-        app.MapPost("/streams/hls/live", async (HlsLiveStartRequest request, HlsSessionRegistry registry, CancellationToken cancellationToken) =>
+        app.MapPost("/streams/hls/live", async (
+            HlsLiveStartRequest request,
+            HlsSessionRegistry registry,
+            IOptions<FfmpegOptions> options,
+            CancellationToken cancellationToken) =>
         {
             await registry.StartLiveAsync(
                 request.StreamId,
@@ -19,10 +25,13 @@ public static class StreamEndpoints
                 request.Priority,
                 request.Command,
                 cancellationToken);
-            return Results.Accepted();
+            return Results.Accepted(value: new HlsStartResponse(options.Value.PublicBaseUrl));
         });
 
-        app.MapPost("/streams/hls/recorded", async (HlsRecordedStartRequest request, HlsSessionRegistry registry) =>
+        app.MapPost("/streams/hls/recorded", async (
+            HlsRecordedStartRequest request,
+            HlsSessionRegistry registry,
+            IOptions<FfmpegOptions> options) =>
         {
             await registry.StartRecordedAsync(
                 request.StreamId,
@@ -34,7 +43,7 @@ public static class StreamEndpoints
                 request.PlayPosition,
                 request.Command,
                 request.IsTransportStream);
-            return Results.Accepted();
+            return Results.Accepted(value: new HlsStartResponse(options.Value.PublicBaseUrl));
         });
 
         app.MapGet("/streams/hls/{streamId:long}", (long streamId, HlsSessionRegistry registry) =>

@@ -46,9 +46,8 @@ public sealed class EncodeWorkerCancellationTests
             new FileInfo(sourcePath).Length,
             CancellationToken.None);
 
-        var jobs = new EncodeJobRegistry();
         var recorded = new PostgresRecordedRepository(database.ContextFactory, clock);
-        var queue = new PostgresEncodeTaskList(database.ContextFactory, recorded, jobs, clock);
+        var queue = new PostgresEncodeTaskList(database.ContextFactory, recorded, clock);
         long encodeId = await queue.EnqueueAsync(
             new EncodeRequest(recordedId, videoFileId, "H.264", RemoveOriginal: false),
             CancellationToken.None);
@@ -68,8 +67,6 @@ public sealed class EncodeWorkerCancellationTests
             new TNLAStation.Infrastructure.CommandHooks.CommandHookRunner(NullLogger<TNLAStation.Infrastructure.CommandHooks.CommandHookRunner>.Instance),
             Options.Create(new EncodeOptions { PollIntervalSeconds = 1 }),
             Options.Create(new CommandHookOptions()),
-            new ImmediateLeaseProvider(),
-            jobs,
             NullClientNotifier.Instance,
             clock,
             NullLogger<EncodeWorker>.Instance);

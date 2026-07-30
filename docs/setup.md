@@ -51,10 +51,12 @@ dotnet run --project src/TNLAStation.Api
 ### FFmpeg Worker
 
 ```sh
-dotnet run --project src/TNLAStation.FfmpegWorker
+ConnectionStrings__PostgreSQL="$ConnectionStrings__PostgreSQL" \
+  dotnet run --project src/TNLAStation.FfmpegWorker
 ```
 
-APIは`FfmpegWorker:BaseUrl`を通じてFFmpeg Workerへ、probe、サムネイル、エンコード、変換配信を依頼します。
+APIは`FfmpegWorker:BaseUrl`を通じてFFmpeg Workerへprobe、サムネイル、変換配信を依頼します。
+録画TSエンコードは各WorkerがPostgreSQLの共有queueを直接claimします。
 HLSセグメントやサムネイルを受け渡す作業ディレクトリは両プロセスから同じ場所を参照させてください。
 
 ## Docker

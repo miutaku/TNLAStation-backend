@@ -21,8 +21,16 @@ public sealed class EncodeTaskEntity
 
     public bool RemoveOriginal { get; set; }
 
-    /// <summary>waiting か running。走っている最中に落ちた行は起動時に waiting へ戻す。</summary>
+    /// <summary>waiting か running。期限切れのrunningは別Workerが再取得できる。</summary>
     public string Status { get; set; } = string.Empty;
+
+    /// <summary>実行権を持つclaimのfencing token。</summary>
+    public Guid? ClaimId { get; set; }
+
+    /// <summary>Workerが更新するlease。期限切れになるまで他Workerは取得しない。</summary>
+    public DateTimeOffset? LeaseExpiresAt { get; set; }
+
+    public bool CancelRequested { get; set; }
 
     public int? Percent { get; set; }
 

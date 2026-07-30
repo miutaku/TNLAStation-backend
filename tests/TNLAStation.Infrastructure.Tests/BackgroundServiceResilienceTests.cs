@@ -55,10 +55,8 @@ public sealed class BackgroundServiceResilienceTests
     [Fact]
     public async Task TheEncodeWorkerSurvivesADatabaseOutageAtStartup()
     {
-        // 起動直後の「実行中を待ちへ戻す」で DB が落ちている。ここで落ちると二度と
-        // エンコードが動かないので、生き残って試し続けることを確かめる。
+        // queue確認時にDBが落ちていても、生き残って試し続けることを確かめる。
         var contextFactory = new ThrowingContextFactory();
-        var lease = new FlakyLeaseProvider(throwUntilAttempt: 0);
         var time = new FakeTimeProvider(Start);
         using var worker = new EncodeWorker(
             contextFactory,
@@ -70,8 +68,6 @@ public sealed class BackgroundServiceResilienceTests
             Unused.Instance,
             Options.Create(new EncodeOptions { PollIntervalSeconds = 1 }),
             Options.Create(new TNLAStation.Infrastructure.Configuration.CommandHookOptions()),
-            lease,
-            new EncodeJobRegistry(),
             NullClientNotifier.Instance,
             time,
             NullLogger<EncodeWorker>.Instance);

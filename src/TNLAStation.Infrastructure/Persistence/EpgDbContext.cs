@@ -441,6 +441,9 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.Property(item => item.Directory).HasColumnName("directory");
             entity.Property(item => item.RemoveOriginal).HasColumnName("remove_original");
             entity.Property(item => item.Status).HasColumnName("status");
+            entity.Property(item => item.ClaimId).HasColumnName("claim_id");
+            entity.Property(item => item.LeaseExpiresAt).HasColumnName("lease_expires_at").HasColumnType("timestamp with time zone");
+            entity.Property(item => item.CancelRequested).HasColumnName("cancel_requested").HasDefaultValue(false);
             entity.Property(item => item.Percent).HasColumnName("percent");
             entity.Property(item => item.Log).HasColumnName("log");
             entity.Property(item => item.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");

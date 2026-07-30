@@ -159,7 +159,9 @@ EPGStationの`config.yml`に存在しないプロセス間接続などは、ASP.
 
 | 環境変数 | 内容 |
 | --- | --- |
-| `FfmpegWorker__BaseUrl` | TNLAStation FFmpeg WorkerのURL |
+| `FfmpegWorker__BaseUrl` | TNLAStation FFmpeg Workerの共通URL（用途別URL未指定時のfallback） |
+| `FfmpegWorker__EncodeBaseUrl` | probe、thumbnailを担当するWorker poolのURL。録画TSエンコードjobはWorkerがPostgreSQLから取得する |
+| `FfmpegWorker__StreamingBaseUrl` | ライブ・録画視聴を担当するWorker poolのURL |
 | `Streaming__WorkDirectory` | backendとWorkerで共有する作業ディレクトリ |
 | `ConnectionStrings__PostgreSQL` | PostgreSQL connection string |
 | `ASPNETCORE_HTTP_PORTS` | ASP.NET Coreの待受ポートを上書き |

@@ -98,6 +98,8 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 sessions.TryRemove(streamId, out _);
                 throw new LiveStreamException("StreamProcessStartFailed");
             }
+
+            record.WorkerBaseAddress = await ReadWorkerBaseAddressAsync(response, cancellationToken);
         }
         finally
         {
@@ -157,6 +159,8 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 sessions.TryRemove(streamId, out _);
                 throw new LiveStreamException("StreamProcessStartFailed");
             }
+
+            record.WorkerBaseAddress = await ReadWorkerBaseAddressAsync(response, cancellationToken);
         }
         finally
         {
@@ -190,14 +194,16 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
 
     public async ValueTask<bool> StopAsync(long streamId)
     {
-        if (!sessions.TryRemove(streamId, out _))
+        if (!sessions.TryRemove(streamId, out SessionRecord? session))
         {
             return false;
         }
 
         try
         {
-            using HttpResponseMessage response = await worker.DeleteAsync($"streams/hls/{streamId}", CancellationToken.None);
+            using HttpResponseMessage response = await worker.DeleteAsync(
+                ResolveWorkerRequestUri(session, $"streams/hls/{streamId}"),
+                CancellationToken.None);
         }
         catch (HttpRequestException exception)
         {
@@ -466,6 +472,11 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     /// </summary>
     private async Task WaitForPlaylistAsync(long streamId, CancellationToken cancellationToken)
     {
+        if (!sessions.TryGetValue(streamId, out SessionRecord? session))
+        {
+            throw new LiveStreamException("StreamIsNotFound");
+        }
+
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         string playlistPath = PlaylistPath(streamId);
@@ -474,7 +485,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         {
             while (!File.Exists(playlistPath))
             {
-                HlsStatusResponse? status = await TryGetStatusAsync(streamId, cancellationToken);
+                HlsStatusResponse? status = await TryGetStatusAsync(session, cancellationToken);
                 if (status is { Found: true, IsRunning: false })
                 {
                     throw new LiveStreamException(status.LastError ?? "ffmpeg exited before producing a playlist");
@@ -489,11 +500,16 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         }
     }
 
-    private async Task<HlsStatusResponse?> TryGetStatusAsync(long streamId, CancellationToken cancellationToken)
+    private async Task<HlsStatusResponse?> TryGetStatusAsync(
+        SessionRecord session,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return await worker.GetFromJsonAsync<HlsStatusResponse>($"streams/hls/{streamId}", JsonOptions, cancellationToken);
+            return await worker.GetFromJsonAsync<HlsStatusResponse>(
+                ResolveWorkerRequestUri(session, $"streams/hls/{session.StreamId}"),
+                JsonOptions,
+                cancellationToken);
         }
         catch (HttpRequestException)
         {
@@ -524,7 +540,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         DateTimeOffset deadline = timeProvider.GetUtcNow().AddSeconds(-Math.Max(5, options.IdleTimeoutSeconds));
         foreach (SessionRecord session in sessions.Values)
         {
-            HlsStatusResponse? status = await TryGetStatusAsync(session.StreamId, CancellationToken.None);
+            HlsStatusResponse? status = await TryGetStatusAsync(session, CancellationToken.None);
             session.IsRunningCached = status?.IsRunning ?? false;
 
             bool expired = session.LastKeepAt < deadline;
@@ -538,7 +554,9 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 LogStreamStopped(logger, session.StreamId, expired ? "idle" : "ffmpeg exited");
                 try
                 {
-                    using HttpResponseMessage response = await worker.DeleteAsync($"streams/hls/{session.StreamId}", CancellationToken.None);
+                    using HttpResponseMessage response = await worker.DeleteAsync(
+                        ResolveWorkerRequestUri(session, $"streams/hls/{session.StreamId}"),
+                        CancellationToken.None);
                 }
                 catch (Exception exception)
                 {
@@ -546,6 +564,55 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 }
             }
         }
+    }
+
+    private static async Task<Uri?> ReadWorkerBaseAddressAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        if (response.Content.Headers.ContentLength is 0)
+        {
+            return null;
+        }
+
+        HlsStartResponse? startResponse;
+        try
+        {
+            startResponse = await response.Content.ReadFromJsonAsync<HlsStartResponse>(
+                JsonOptions,
+                cancellationToken);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(startResponse?.WorkerBaseUrl))
+        {
+            return null;
+        }
+
+        string value = startResponse.WorkerBaseUrl.EndsWith('/')
+            ? startResponse.WorkerBaseUrl
+            : $"{startResponse.WorkerBaseUrl}/";
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? address))
+        {
+            throw new LiveStreamException("WorkerBaseUrlIsInvalid");
+        }
+
+        if (address.Scheme is not ("http" or "https"))
+        {
+            throw new LiveStreamException("WorkerBaseUrlIsInvalid");
+        }
+
+        return address;
+    }
+
+    private static Uri ResolveWorkerRequestUri(SessionRecord session, string relativePath)
+    {
+        return session.WorkerBaseAddress is null
+            ? new Uri(relativePath, UriKind.Relative)
+            : new Uri(session.WorkerBaseAddress, relativePath);
     }
 
     private sealed class SessionRecord
@@ -576,6 +643,8 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         public DateTimeOffset LastKeepAt { get; set; }
 
         public bool IsRunningCached { get; set; } = true;
+
+        public Uri? WorkerBaseAddress { get; set; }
     }
 
     /// <summary>
@@ -635,6 +704,8 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     private sealed record HlsLiveStartRequest(long StreamId, long ChannelId, int Height, string VideoBitrate, string AudioBitrate, int SegmentSeconds, int? Priority, string? Command);
 
     private sealed record HlsRecordedStartRequest(long StreamId, string Path, int Height, string VideoBitrate, string AudioBitrate, int SegmentSeconds, double PlayPosition, string Command, bool IsTransportStream);
+
+    private sealed record HlsStartResponse(string? WorkerBaseUrl);
 
     private sealed record HlsStatusResponse(bool Found, bool IsRunning, string? LastError);
 

@@ -67,8 +67,8 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IConfigRepository, EpgStationConfigRepository>();
         services.AddSingleton<IStorageRepository, RecordedDirectoryStorageRepository>();
         services.AddSingleton<IVersionRepository, MockVersionRepository>();
-        services.AddHttpClient(FfmpegWorkerClientName, ConfigureFfmpegWorkerClient);
-        services.AddHttpClient<IMediaProbe, RemoteMediaProbe>(ConfigureFfmpegWorkerClient);
+        services.AddHttpClient(FfmpegStreamingWorkerClientName, ConfigureStreamingWorkerClient);
+        services.AddHttpClient<IMediaProbe, RemoteMediaProbe>(ConfigureEncodeWorkerClient);
         services.AddSingleton<IRecordingJobRegistry, RecordingJobRegistry>();
         services.AddSingleton<RecordingScheduleSignal>();
         services.AddSingleton<IRecordingScheduleTrigger>(provider =>
@@ -79,6 +79,47 @@ public static class InfrastructureServiceCollectionExtensions
         AddRuleStore(services, configuration.GetConnectionString(PostgresConnectionName));
         AddMirakurun(services, configuration.GetSection(MirakurunOptions.SectionName).Get<MirakurunOptions>());
 
+        return services;
+    }
+
+    /// <summary>
+    /// PostgreSQLの共有queueを直接claimするエンコード専用nodeを構成する。
+    /// API、録画scheduler、EPG同期は起動しない。
+    /// </summary>
+    public static IServiceCollection AddTnlaStationEncodeWorker(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        string connectionString = configuration.GetConnectionString(PostgresConnectionName)
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings:PostgreSQL is required by an encode worker.");
+
+        services.TryAddTimeProvider();
+        services.Configure<EpgOptions>(configuration.GetSection(EpgOptions.SectionName));
+        services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
+        services.Configure<EncodeOptions>(configuration.GetSection(EncodeOptions.SectionName));
+        services.Configure<CommandHookOptions>(configuration.GetSection(CommandHookOptions.SectionName));
+        services.AddDbContextFactory<EpgDbContext>(options => options.UseNpgsql(
+            connectionString,
+            npgsql => npgsql.MigrationsAssembly(typeof(EpgDbContext).Assembly.FullName)));
+        services.AddSingleton<PostgresVideoFileRepository>();
+        services.AddSingleton<IVideoFileRepository>(provider =>
+            provider.GetRequiredService<PostgresVideoFileRepository>());
+        services.AddSingleton<PostgresRecordedRepository>();
+        services.AddSingleton<IRecordedItemRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordedRepository>());
+        services.AddSingleton<PostgresRecordingStore>();
+        services.AddSingleton<IDropLogRepository>(provider =>
+            provider.GetRequiredService<PostgresRecordingStore>());
+        services.AddSingleton<PostgresEpgRepository>();
+        services.AddSingleton<IEpgRepository>(provider =>
+            provider.GetRequiredService<PostgresEpgRepository>());
+        services.AddSingleton<ICommandHookRunner, CommandHookRunner>();
+        services.AddSingleton<IClientNotifier>(NullClientNotifier.Instance);
+        services.AddHostedService<EncodeWorker>();
         return services;
     }
 
@@ -157,15 +198,13 @@ public static class InfrastructureServiceCollectionExtensions
             provider.GetRequiredService<PostgresVideoFileRepository>());
         services.AddSingleton<IVideoFileUploadRepository>(provider =>
             provider.GetRequiredService<PostgresVideoFileRepository>());
-        services.AddSingleton<IEncodeJobRegistry, EncodeJobRegistry>();
         services.AddSingleton<PostgresEncodeTaskList>();
         services.AddSingleton<IEncodeTaskList>(provider => provider.GetRequiredService<PostgresEncodeTaskList>());
         services.AddSingleton<IEncodeQueueRepository>(provider =>
             provider.GetRequiredService<PostgresEncodeTaskList>());
-        services.AddHttpClient<IEncodeExecutor, RemoteEncodeExecutor>(ConfigureFfmpegWorkerClient);
-        services.AddHostedService<EncodeWorker>();
+        services.AddHostedService<EncodeQueueNotificationService>();
         services.AddHostedService<StorageLimitHostedService>();
-        services.AddHttpClient<IThumbnailService, RemoteThumbnailService>(ConfigureFfmpegWorkerClient);
+        services.AddHttpClient<IThumbnailService, RemoteThumbnailService>(ConfigureEncodeWorkerClient);
         services.AddSingleton<PostgresReserveRepository>();
         services.AddSingleton<IReserveRepository>(provider =>
             provider.GetRequiredService<PostgresReserveRepository>());
@@ -220,7 +259,7 @@ public static class InfrastructureServiceCollectionExtensions
         // ILiveStreamService と IStreamRepository は同じインスタンスを指さないと、片方で開始した
         // 配信がもう片方の一覧に出てこなくなる。
         services.AddSingleton(provider => new RemoteLiveStreamService(
-            provider.GetRequiredService<IHttpClientFactory>().CreateClient(FfmpegWorkerClientName),
+            provider.GetRequiredService<IHttpClientFactory>().CreateClient(FfmpegStreamingWorkerClientName),
             provider.GetRequiredService<IMirakurunClient>(),
             provider.GetRequiredService<IEpgRepository>(),
             provider.GetRequiredService<IVideoFileRepository>(),
@@ -233,18 +272,30 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IStreamRepository>(provider => provider.GetRequiredService<RemoteLiveStreamService>());
     }
 
-    private const string FfmpegWorkerClientName = "FfmpegWorker";
+    private const string FfmpegStreamingWorkerClientName = "FfmpegStreamingWorker";
 
-    /// <summary>
-    /// ffmpeg-worker への typed client はどれも同じ接続先を見るので、設定の解決だけをここへ集約する。
-    /// </summary>
-    private static void ConfigureFfmpegWorkerClient(IServiceProvider provider, HttpClient client)
+    private static void ConfigureEncodeWorkerClient(IServiceProvider provider, HttpClient client)
     {
         FfmpegWorkerOptions options = provider.GetRequiredService<IOptions<FfmpegWorkerOptions>>().Value;
-        if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+        string baseUrl = options.ResolveEncodeBaseUrl();
+        if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            client.BaseAddress = new Uri(options.BaseUrl);
+            return;
         }
+
+        client.BaseAddress = new Uri(baseUrl);
+    }
+
+    private static void ConfigureStreamingWorkerClient(IServiceProvider provider, HttpClient client)
+    {
+        FfmpegWorkerOptions options = provider.GetRequiredService<IOptions<FfmpegWorkerOptions>>().Value;
+        string baseUrl = options.ResolveStreamingBaseUrl();
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return;
+        }
+
+        client.BaseAddress = new Uri(baseUrl);
     }
 
     private static Uri GetBaseAddress(MirakurunOptions options)

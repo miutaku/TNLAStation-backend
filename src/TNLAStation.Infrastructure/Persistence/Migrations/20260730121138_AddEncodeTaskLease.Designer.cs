@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TNLAStation.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using TNLAStation.Infrastructure.Persistence;
 namespace TNLAStation.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(EpgDbContext))]
-    partial class EpgDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260730121138_AddEncodeTaskLease")]
+    partial class AddEncodeTaskLease
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -79,12 +82,6 @@ namespace TNLAStation.Infrastructure.Persistence.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<bool>("CancelRequested")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("cancel_requested");
 
                     b.Property<Guid?>("ClaimId")
                         .HasColumnType("uuid")

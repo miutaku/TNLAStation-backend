@@ -61,22 +61,37 @@ public sealed class PostgresEncodeTaskListTests
     {
         await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
         await RecordingTestData.SeedEpgAsync(database);
-        var jobs = new EncodeJobRegistry();
         (PostgresEncodeTaskList queue, long recordedId, long videoFileId) =
-            await CreateAsync(database, jobs);
+            await CreateAsync(database);
         long id = await queue.EnqueueAsync(
             Request(recordedId, videoFileId),
             CancellationToken.None);
-        using var jobCancellation = new CancellationTokenSource();
-        using IDisposable registration = jobs.Register(id, jobCancellation);
+        await using (EpgDbContext context = await database.ContextFactory.CreateDbContextAsync())
+        {
+            await context.EncodeTasks
+                .Where(task => task.Id == id)
+                .ExecuteUpdateAsync(update => update.SetProperty(task => task.Status, "running"));
+        }
 
         Task<bool> cancel = queue.CancelAsync(id, CancellationToken.None).AsTask();
-        await WaitUntilAsync(() => jobCancellation.IsCancellationRequested);
+        for (int attempt = 0; attempt < 200; attempt++)
+        {
+            if (await IsCancellationRequested(database, id))
+            {
+                break;
+            }
 
-        Assert.True(jobCancellation.IsCancellationRequested);
+            await Task.Delay(10);
+        }
+
+        Assert.True(await IsCancellationRequested(database, id));
         Assert.False(cancel.IsCompleted);
 
-        registration.Dispose();
+        await using (EpgDbContext context = await database.ContextFactory.CreateDbContextAsync())
+        {
+            await context.EncodeTasks.Where(task => task.Id == id).ExecuteDeleteAsync();
+        }
+
         Assert.True(await cancel.WaitAsync(TimeSpan.FromSeconds(2)));
     }
 
@@ -111,8 +126,7 @@ public sealed class PostgresEncodeTaskListTests
     }
 
     private static async Task<(PostgresEncodeTaskList Queue, long RecordedId, long VideoFileId)> CreateAsync(
-        PostgresTestDatabase database,
-        EncodeJobRegistry? jobs = null)
+        PostgresTestDatabase database)
     {
         var store = new PostgresRecordingStore(database.ContextFactory, RecordingTestData.Clock());
         var recorded = new PostgresRecordedRepository(database.ContextFactory, RecordingTestData.Clock());
@@ -133,9 +147,19 @@ public sealed class PostgresEncodeTaskListTests
         var queue = new PostgresEncodeTaskList(
             database.ContextFactory,
             recorded,
-            jobs ?? new EncodeJobRegistry(),
             RecordingTestData.Clock());
         return (queue, recordedId, videoFileId);
+    }
+
+    private static async Task<bool> IsCancellationRequested(
+        PostgresTestDatabase database,
+        long id)
+    {
+        await using EpgDbContext context = await database.ContextFactory.CreateDbContextAsync();
+        return await context.EncodeTasks
+            .Where(task => task.Id == id)
+            .Select(task => task.CancelRequested)
+            .SingleAsync();
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
