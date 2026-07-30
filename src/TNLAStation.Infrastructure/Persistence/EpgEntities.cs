@@ -101,6 +101,8 @@ public sealed class EpgProgramEntity
 
     public int? AudioComponentType { get; set; }
 
+    public string? RelayProgramIdsJson { get; set; }
+
     public EpgChannelEntity? ChannelEntity { get; set; }
 }
 

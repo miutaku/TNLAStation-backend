@@ -56,6 +56,12 @@ internal sealed class Unused :
         CancellationToken cancellationToken) =>
         throw NotExpected();
 
+    public ValueTask UpdateEndAtAsync(
+        long recordedId,
+        DateTimeOffset endAt,
+        CancellationToken cancellationToken) =>
+        throw NotExpected();
+
     public ValueTask CompleteAsync(long recordedId, long videoFileId, long size, CancellationToken cancellationToken) =>
         throw NotExpected();
 

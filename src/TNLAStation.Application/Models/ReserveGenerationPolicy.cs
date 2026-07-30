@@ -26,20 +26,28 @@ public static class ReserveGenerationPolicy
         ArgumentNullException.ThrowIfNull(input);
 
         var targets = new List<ReserveTarget>();
+        Dictionary<long, EpgProgram> programsById = input.Programs.ToDictionary(program => program.Id);
         foreach (ManualReserve reserve in input.ManualReserves)
         {
+            // 番組を選んで作った手動予約は、作成時に保存した時刻ではなく最新の EPG を使う。
+            // 時刻指定予約は番組表に左右されないという利用者の指定なので、そのままにする。
+            EpgProgram? program = !reserve.IsTimeSpecified &&
+                reserve.ProgramId is { } programId &&
+                programsById.TryGetValue(programId, out EpgProgram? found)
+                    ? found
+                    : null;
             targets.Add(new ReserveTarget(
                 reserve.IsTimeSpecified ? ReserveSource.TimeSpecified : ReserveSource.Manual,
-                reserve.ChannelId,
-                reserve.ChannelType,
-                reserve.StartAt,
-                reserve.EndAt,
-                reserve.Name,
+                program?.ChannelId ?? reserve.ChannelId,
+                program?.ChannelType ?? reserve.ChannelType,
+                program?.StartAt ?? reserve.StartAt,
+                program?.EndAt ?? reserve.EndAt,
+                program?.Name ?? reserve.Name,
                 reserve.ProgramId,
                 ManualReserveId: reserve.Id,
                 IsSkip: reserve.IsSkip,
                 Priority: reserve.Priority,
-                Channel: reserve.Channel));
+                Channel: program?.Channel ?? reserve.Channel));
         }
 
         foreach (RecordingRule rule in input.Rules.Where(rule => rule.ReserveOption.Enable))
@@ -47,6 +55,7 @@ public static class ReserveGenerationPolicy
             targets.AddRange(CollectRuleTargets(rule, input));
         }
 
+        targets = FollowEventRelays(targets, input.Programs, input.Now);
         ReserveStates states = input.States ?? ReserveStates.Empty;
         return [.. targets.Select(target => target with
         {
@@ -54,6 +63,78 @@ public static class ReserveGenerationPolicy
             // 重複の判断を人が覆していれば、判断し直さずそのまま録る。
             IsOverlap = target.IsOverlap && !states.OverlapCleared.Contains(target.Key),
         })];
+    }
+
+    private static List<ReserveTarget> FollowEventRelays(
+        IReadOnlyList<ReserveTarget> targets,
+        IReadOnlyList<EpgProgram> programs,
+        DateTimeOffset now)
+    {
+        Dictionary<long, EpgProgram> byId = programs.ToDictionary(program => program.Id);
+        var parentByChild = new Dictionary<long, long>();
+        foreach (EpgProgram program in programs)
+        {
+            foreach (long childId in program.RelayProgramIds ?? [])
+            {
+                parentByChild.TryAdd(childId, program.Id);
+            }
+        }
+
+        var followed = new Dictionary<string, ReserveTarget>(StringComparer.Ordinal);
+        foreach (ReserveTarget target in targets)
+        {
+            if (target.Source == ReserveSource.TimeSpecified ||
+                target.ProgramId is not { } targetProgramId)
+            {
+                followed[target.Key] = target;
+                continue;
+            }
+
+            long rootId = targetProgramId;
+            var visited = new HashSet<long>();
+            while (parentByChild.TryGetValue(rootId, out long parentId) && visited.Add(rootId))
+            {
+                rootId = parentId;
+            }
+
+            var chain = new List<EpgProgram>();
+            long currentId = rootId;
+            visited.Clear();
+            while (byId.TryGetValue(currentId, out EpgProgram? current) && visited.Add(currentId))
+            {
+                chain.Add(current);
+                long? nextId = current.RelayProgramIds?.FirstOrDefault(id => byId.ContainsKey(id));
+                if (nextId is null or 0)
+                {
+                    break;
+                }
+
+                currentId = nextId.Value;
+            }
+
+            if (chain.Count == 0)
+            {
+                followed[target.Key] = target;
+                continue;
+            }
+
+            EpgProgram root = chain[0];
+            EpgProgram active = chain.LastOrDefault(program => program.StartAt <= now) ?? root;
+            EpgProgram terminal = chain[^1];
+            ReserveTarget updated = target with
+            {
+                ProgramId = rootId,
+                ChannelId = active.ChannelId,
+                ChannelType = active.ChannelType,
+                Channel = active.Channel,
+                StartAt = root.StartAt,
+                EndAt = terminal.EndAt,
+                Name = root.Name,
+            };
+            followed[updated.Key] = updated;
+        }
+
+        return [.. followed.Values];
     }
 
     /// <summary>

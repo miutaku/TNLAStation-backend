@@ -48,7 +48,8 @@ public sealed record EpgProgram(
     int? VideoStreamContent = null,
     int? VideoComponentType = null,
     int? AudioSamplingRate = null,
-    int? AudioComponentType = null);
+    int? AudioComponentType = null,
+    IReadOnlyList<long>? RelayProgramIds = null);
 
 public sealed record EpgSnapshot(
     IReadOnlyList<EpgChannel> Channels,

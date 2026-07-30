@@ -353,6 +353,72 @@ public sealed class ReserveGenerationPolicyTests
     }
 
     [Fact]
+    public void AManualProgramReserveFollowsTheLatestEpgTime()
+    {
+        EpgProgram moved = CreateProgram(
+            42,
+            name: "延長後の番組",
+            channelId: 200,
+            startAt: Now.AddHours(2));
+        ReserveGenerationInput input = CreateInput(
+            programs: [moved],
+            manualReserves: [CreateManualReserve(id: 10, programId: 42)]);
+
+        ReserveTarget target = Assert.Single(ReserveGenerationPolicy.CollectTargets(input));
+
+        Assert.Equal(moved.StartAt, target.StartAt);
+        Assert.Equal(moved.EndAt, target.EndAt);
+        Assert.Equal(moved.ChannelId, target.ChannelId);
+        Assert.Equal(moved.Name, target.Name);
+    }
+
+    [Fact]
+    public void ATimeSpecifiedReserveDoesNotFollowEpg()
+    {
+        ManualReserve specified = CreateManualReserve(id: 10, programId: 42) with
+        {
+            IsTimeSpecified = true,
+        };
+        ReserveGenerationInput input = CreateInput(
+            programs: [CreateProgram(42, name: "移動した番組", startAt: Now.AddHours(3))],
+            manualReserves: [specified]);
+
+        ReserveTarget target = Assert.Single(ReserveGenerationPolicy.CollectTargets(input));
+
+        Assert.Equal(specified.StartAt, target.StartAt);
+        Assert.Equal(specified.EndAt, target.EndAt);
+        Assert.Equal(specified.Name, target.Name);
+    }
+
+    [Fact]
+    public void AnEventRelayKeepsTheRootKeyAndSwitchesToTheActiveService()
+    {
+        EpgProgram relay = CreateProgram(
+            2,
+            name: "中継",
+            channelId: 101,
+            startAt: Now.AddMinutes(-5));
+        EpgProgram root = CreateProgram(
+            1,
+            name: "中継",
+            startAt: Now.AddHours(-1)) with
+        {
+            RelayProgramIds = [relay.Id],
+        };
+        ReserveGenerationInput input = CreateInput(
+            rules: [CreateRule(keyword: "中継")],
+            programs: [root, relay]);
+
+        ReserveTarget target = Assert.Single(ReserveGenerationPolicy.CollectTargets(input));
+
+        Assert.Equal("rule:1:1", target.Key);
+        Assert.Equal(101, target.ChannelId);
+        Assert.Equal(root.StartAt, target.StartAt);
+        Assert.Equal(relay.EndAt, target.EndAt);
+        Assert.Equal(root.Name, target.Name);
+    }
+
+    [Fact]
     public void WithoutATunerEveryReserveConflicts()
     {
         ReserveGenerationInput input = CreateInput(

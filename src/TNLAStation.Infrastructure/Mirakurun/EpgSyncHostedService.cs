@@ -14,6 +14,7 @@ public sealed partial class EpgSyncHostedService(
     MirakurunEpgMapper mapper,
     IEpgStore store,
     IEpgSyncLeaseProvider leaseProvider,
+    IReserveGenerationTrigger reserveGeneration,
     IOptions<MirakurunOptions> mirakurunOptions,
     IOptions<EpgOptions> epgOptions,
     TimeProvider timeProvider,
@@ -124,6 +125,7 @@ public sealed partial class EpgSyncHostedService(
         IReadOnlyList<EpgProgram> programs = mapper.MapPrograms(await programsTask, channelIndex, capturedAt);
         await store.ReplaceSnapshotAsync(new EpgSnapshot(channels, programs, capturedAt), cancellationToken);
         await store.DeleteProgramsEndingBeforeAsync(capturedAt, cancellationToken);
+        await RegenerateReservesAsync(cancellationToken);
         LogSnapshotCommitted(logger, channels.Count, programs.Count);
         return channelIndex;
     }
@@ -221,8 +223,27 @@ public sealed partial class EpgSyncHostedService(
             deletes,
             state.LastEventAt,
             cancellationToken);
+        await RegenerateReservesAsync(cancellationToken);
         state.PendingPrograms.Clear();
         state.ServicesChanged = false;
+    }
+
+    private async Task RegenerateReservesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await reserveGeneration.RequestAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            // EPG 自体は確定済み。予約生成の一時的な失敗でイベントストリームまで
+            // 張り直す必要はなく、定期生成でも再試行される。
+            LogReserveGenerationFailed(logger, exception);
+        }
     }
 
     private static async Task ThrowIfProducerCompletedAsync(
@@ -334,6 +355,12 @@ public sealed partial class EpgSyncHostedService(
         Level = LogLevel.Information,
         Message = "Committed Mirakurun EPG snapshot with {ChannelCount} channels and {ProgramCount} programs.")]
     private static partial void LogSnapshotCommitted(ILogger logger, int channelCount, int programCount);
+
+    [LoggerMessage(
+        EventId = 2006,
+        Level = LogLevel.Error,
+        Message = "EPG was updated, but reserves could not be regenerated immediately.")]
+    private static partial void LogReserveGenerationFailed(ILogger logger, Exception exception);
 
     private TimeSpan GetUpdateInterval() =>
         TimeSpan.FromMinutes(Math.Max(1, epgOptions.UpdateIntervalMinutes));

@@ -60,7 +60,8 @@ internal static class EpgEntityMapper
             entity.VideoStreamContent,
             entity.VideoComponentType,
             entity.AudioSamplingRate,
-            entity.AudioComponentType);
+            entity.AudioComponentType,
+            DeserializeLongArray(entity.RelayProgramIdsJson));
 
     public static EpgChannelEntity CreateEntity(EpgChannel channel, DateTimeOffset updatedAt)
     {
@@ -142,6 +143,9 @@ internal static class EpgEntityMapper
         entity.VideoComponentType = program.VideoComponentType;
         entity.AudioSamplingRate = program.AudioSamplingRate;
         entity.AudioComponentType = program.AudioComponentType;
+        entity.RelayProgramIdsJson = program.RelayProgramIds is { Count: > 0 }
+            ? JsonSerializer.Serialize(program.RelayProgramIds, JsonOptions)
+            : null;
     }
 
     private static string? SerializeDictionary(IReadOnlyDictionary<string, string>? value) =>
@@ -152,4 +156,7 @@ internal static class EpgEntityMapper
             ? null
             : JsonSerializer.Deserialize<Dictionary<string, string>>(value, JsonOptions)
                 ?? new Dictionary<string, string>(StringComparer.Ordinal);
+
+    private static long[]? DeserializeLongArray(string? value) =>
+        value is null ? null : JsonSerializer.Deserialize<long[]>(value, JsonOptions);
 }

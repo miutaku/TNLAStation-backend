@@ -52,6 +52,9 @@ public interface IRecordingStore
         string filename,
         CancellationToken cancellationToken);
 
+    /// <summary>EPG の延長・繰り上げを録画中のメタデータにも反映する。</summary>
+    ValueTask UpdateEndAtAsync(long recordedId, DateTimeOffset endAt, CancellationToken cancellationToken);
+
     /// <summary>録り終わり。実際に書けた大きさを残す。</summary>
     ValueTask CompleteAsync(long recordedId, long videoFileId, long size, CancellationToken cancellationToken);
 

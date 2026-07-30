@@ -120,6 +120,7 @@ public sealed class EpgDbContext(DbContextOptions<EpgDbContext> options) : DbCon
             entity.Property(item => item.VideoComponentType).HasColumnName("video_component_type");
             entity.Property(item => item.AudioSamplingRate).HasColumnName("audio_sampling_rate");
             entity.Property(item => item.AudioComponentType).HasColumnName("audio_component_type");
+            entity.Property(item => item.RelayProgramIdsJson).HasColumnName("relay_program_ids").HasColumnType("json");
             entity.HasIndex(item => new { item.NetworkId, item.ServiceId, item.EventId })
                 .IsUnique()
                 .HasDatabaseName("uq_programs_event");

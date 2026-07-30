@@ -60,6 +60,17 @@ public sealed class PostgresRecordingStore(
         return (recorded.Id, file.Id);
     }
 
+    public async ValueTask UpdateEndAtAsync(
+        long recordedId,
+        DateTimeOffset endAt,
+        CancellationToken cancellationToken)
+    {
+        await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
+        await context.Recorded
+            .Where(item => item.Id == recordedId && item.IsRecording)
+            .ExecuteUpdateAsync(item => item.SetProperty(x => x.EndAt, endAt), cancellationToken);
+    }
+
     public async ValueTask CompleteAsync(
         long recordedId,
         long videoFileId,

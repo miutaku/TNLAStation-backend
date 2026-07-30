@@ -281,8 +281,21 @@ public sealed partial class RecordingScheduler(
         foreach (string reserveKey in running.Keys.ToArray())
         {
             RecordingSession session = running[reserveKey];
-            bool overdue = !reservesByKey.TryGetValue(reserveKey, out Reservation? reserve) ||
-                now >= DateTimeOffset.FromUnixTimeMilliseconds(reserve.EndAt)
+            bool found = reservesByKey.TryGetValue(reserveKey, out Reservation? reserve);
+            if (found && session.IsRunning)
+            {
+                if (session.ChannelId != reserve!.ChannelId)
+                {
+                    session.SwitchChannel(reserve.ChannelId);
+                }
+
+                await session.UpdateEndAtAsync(
+                    DateTimeOffset.FromUnixTimeMilliseconds(reserve.EndAt),
+                    CancellationToken.None);
+            }
+
+            bool overdue = !found ||
+                now >= DateTimeOffset.FromUnixTimeMilliseconds(reserve!.EndAt)
                     .AddSeconds(reserve.IsTimeSpecified ? options.EndMarginSeconds : 0);
             if (!overdue && session.IsRunning)
             {

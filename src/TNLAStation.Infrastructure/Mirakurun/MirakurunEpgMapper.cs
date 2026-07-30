@@ -56,12 +56,22 @@ public sealed class MirakurunEpgMapper(IOptions<EpgOptions> options)
         DateTimeOffset updateTime)
     {
         var result = new Dictionary<long, EpgProgram>();
-        foreach (MirakurunProgramDto program in programs)
+        foreach (IGrouping<(int NetworkId, int ServiceId), MirakurunProgramDto> servicePrograms in
+            programs.GroupBy(program => (program.NetworkId, program.ServiceId)))
         {
-            EpgProgram? mapped = MapProgram(program, channelIndex, updateTime);
-            if (mapped is not null)
+            MirakurunProgramDto[] ordered = [.. servicePrograms
+                .OrderBy(program => program.StartAt)
+                .ThenBy(program => program.Id)];
+            for (int index = 0; index < ordered.Length; index++)
             {
-                result[mapped.Id] = mapped;
+                DateTimeOffset? nextStartAt = index + 1 < ordered.Length
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(ordered[index + 1].StartAt)
+                    : null;
+                EpgProgram? mapped = MapProgram(ordered[index], channelIndex, updateTime, nextStartAt);
+                if (mapped is not null)
+                {
+                    result[mapped.Id] = mapped;
+                }
             }
         }
 
@@ -71,7 +81,14 @@ public sealed class MirakurunEpgMapper(IOptions<EpgOptions> options)
     public EpgProgram? MapProgram(
         MirakurunProgramDto program,
         IReadOnlyDictionary<(int NetworkId, int ServiceId), EpgChannel> channelIndex,
-        DateTimeOffset updateTime)
+        DateTimeOffset updateTime) =>
+        MapProgram(program, channelIndex, updateTime, nextStartAt: null);
+
+    private EpgProgram? MapProgram(
+        MirakurunProgramDto program,
+        IReadOnlyDictionary<(int NetworkId, int ServiceId), EpgChannel> channelIndex,
+        DateTimeOffset updateTime,
+        DateTimeOffset? nextStartAt)
     {
         if (program.Name is null || !IsMainProgram(program) ||
             !channelIndex.TryGetValue((program.NetworkId, program.ServiceId), out EpgChannel? channel))
@@ -80,7 +97,8 @@ public sealed class MirakurunEpgMapper(IOptions<EpgOptions> options)
         }
 
         DateTimeOffset startAt = DateTimeOffset.FromUnixTimeMilliseconds(program.StartAt);
-        DateTimeOffset endAt = startAt.AddMilliseconds(program.Duration);
+        DateTimeOffset endAt = ResolveEndAt(program.Duration, startAt, nextStartAt, updateTime);
+        long durationMilliseconds = Math.Max(1, (long)(endAt - startAt).TotalMilliseconds);
         DateTimeOffset japanStartAt = TimeZoneInfo.ConvertTime(startAt, JapanTimeZone);
         string name = NormalizeDisplayString(program.Name);
         string halfWidthName = EpgStringNormalizer.ToHalfWidth(name);
@@ -141,7 +159,7 @@ public sealed class MirakurunEpgMapper(IOptions<EpgOptions> options)
             endAt,
             japanStartAt.Hour,
             (int)japanStartAt.DayOfWeek,
-            program.Duration,
+            durationMilliseconds,
             program.IsFree,
             name,
             halfWidthName,
@@ -165,7 +183,40 @@ public sealed class MirakurunEpgMapper(IOptions<EpgOptions> options)
             program.Video?.StreamContent,
             program.Video?.ComponentType,
             audioSamplingRate,
-            audioComponentType);
+            audioComponentType,
+            RelayProgramIds(program));
+    }
+
+    private static long[] RelayProgramIds(MirakurunProgramDto program) =>
+        [.. (program.RelatedItems ?? [])
+            .Where(item => string.Equals(item.Type, "relay", StringComparison.Ordinal))
+            .Select(item => CreateProgramId(
+                item.NetworkId ?? program.NetworkId,
+                item.ServiceId,
+                item.EventId))
+            .Distinct()];
+
+    internal static long CreateProgramId(int networkId, int serviceId, long eventId) =>
+        networkId * 10_000_000_000L + serviceId * 100_000L + eventId;
+
+    private DateTimeOffset ResolveEndAt(
+        long durationMilliseconds,
+        DateTimeOffset startAt,
+        DateTimeOffset? nextStartAt,
+        DateTimeOffset updateTime)
+    {
+        if (durationMilliseconds > 1)
+        {
+            return startAt.AddMilliseconds(durationMilliseconds);
+        }
+
+        // ARIB の duration が未定の番組を Mirakurun は 1ms として返す。文字どおり扱うと
+        // 開始直後に「終了済み」として消えるため、次番組の予定開始までは保持する。
+        // 放送がそこを越えて続く場合も、定期 EPG 更新のたびに猶予を先へ延ばし、
+        // 確定 duration が届いた時点で正式な終了時刻へ戻す。
+        DateTimeOffset rollingEnd = updateTime.AddMinutes(Math.Max(2, epgOptions.UpdateIntervalMinutes * 2));
+        DateTimeOffset minimumEnd = startAt.AddMinutes(1);
+        return new[] { nextStartAt ?? DateTimeOffset.MinValue, rollingEnd, minimumEnd }.Max();
     }
 
     public static bool IsMainProgram(MirakurunProgramDto program)

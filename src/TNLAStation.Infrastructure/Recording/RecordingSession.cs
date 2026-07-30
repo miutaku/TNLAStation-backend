@@ -47,12 +47,43 @@ internal sealed partial class RecordingSession(
     ILogger logger) : IDisposable
 {
     private readonly CancellationTokenSource lifetime = new();
+    private readonly object streamGate = new();
+    private long currentChannelId = channelId;
+    private long currentEndAt = endAt.ToUnixTimeMilliseconds();
+    private CancellationTokenSource? activeStreamCancellation;
     private IDisposable? registration;
     private Task? worker;
 
     public long ReserveId => reserveId;
 
     public bool IsRunning => worker is { IsCompleted: false };
+
+    public long ChannelId => Interlocked.Read(ref currentChannelId);
+
+    public void SwitchChannel(long updatedChannelId)
+    {
+        if (Interlocked.Exchange(ref currentChannelId, updatedChannelId) == updatedChannelId)
+        {
+            return;
+        }
+
+        lock (streamGate)
+        {
+            activeStreamCancellation?.Cancel();
+        }
+    }
+
+    public async ValueTask UpdateEndAtAsync(DateTimeOffset updatedEndAt, CancellationToken cancellationToken)
+    {
+        long value = updatedEndAt.ToUnixTimeMilliseconds();
+        if (Interlocked.Read(ref currentEndAt) == value)
+        {
+            return;
+        }
+
+        await store.UpdateEndAtAsync(recordedId, updatedEndAt, cancellationToken);
+        Interlocked.Exchange(ref currentEndAt, value);
+    }
 
     public void Start()
     {
@@ -114,7 +145,6 @@ internal sealed partial class RecordingSession(
         var analyzer = new TransportStreamAnalyzer();
         try
         {
-            await using Stream source = await mirakurun.OpenServiceStreamAsync(channelId, cancellationToken, mirakurunPriority);
             hooks.RunRecordedHook(recordingStartCommand, BuildRecordedPayload());
             notifier.NotifyClient();
             Directory.CreateDirectory(Path.GetDirectoryName(writePath) is { Length: > 0 } writeDirectory ? writeDirectory : ".");
@@ -127,23 +157,58 @@ internal sealed partial class RecordingSession(
                 useAsync: true);
 
             byte[] buffer = new byte[1 << 16];
-            while (true)
+            while (!cancellationToken.IsCancellationRequested)
             {
-                int read = await source.ReadAsync(buffer, cancellationToken);
-                if (read == 0)
+                using var streamCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                lock (streamGate)
                 {
-                    break;
+                    activeStreamCancellation = streamCancellation;
                 }
 
-                // 受信の質は録った後では分からない。書きながら数える。無効なら丸ごと省く —
-                // 数えるだけでも毎バッファ分のコストがかかる。
-                if (isEnabledDropCheck)
+                long openedChannelId = ChannelId;
+                try
                 {
-                    analyzer.Append(buffer.AsSpan(0, read));
+                    await using Stream source = await mirakurun.OpenServiceStreamAsync(
+                        openedChannelId,
+                        streamCancellation.Token,
+                        mirakurunPriority);
+                    while (true)
+                    {
+                        int read = await source.ReadAsync(buffer, streamCancellation.Token);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        if (isEnabledDropCheck)
+                        {
+                            analyzer.Append(buffer.AsSpan(0, read));
+                        }
+
+                        await destination.WriteAsync(
+                            buffer.AsMemory(0, read),
+                            streamCancellation.Token);
+                        written += read;
+                    }
+                }
+                catch (OperationCanceledException) when (
+                    !cancellationToken.IsCancellationRequested && ChannelId != openedChannelId)
+                {
+                    // イベントリレー。ファイルは閉じず、次のサービスのストリームへ接続し直す。
+                    continue;
+                }
+                finally
+                {
+                    lock (streamGate)
+                    {
+                        if (ReferenceEquals(activeStreamCancellation, streamCancellation))
+                        {
+                            activeStreamCancellation = null;
+                        }
+                    }
                 }
 
-                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-                written += read;
+                break;
             }
         }
         catch (OperationCanceledException)
@@ -204,7 +269,11 @@ internal sealed partial class RecordingSession(
             // 次にまた録りたくなっても妨げない。
             if (ruleId is not null)
             {
-                await history.AddAsync(name, channelId, endAt, CancellationToken.None);
+                await history.AddAsync(
+                    name,
+                    ChannelId,
+                    DateTimeOffset.FromUnixTimeMilliseconds(Interlocked.Read(ref currentEndAt)),
+                    CancellationToken.None);
             }
 
             // 一覧で中身を思い出せるように 1 枚取る。取れなくても録画は成立するので、
@@ -230,11 +299,11 @@ internal sealed partial class RecordingSession(
     private RecordedHookPayload BuildRecordedPayload(TransportStreamDefects? defects = null, string? dropLogPath = null) => new(
         recordedId,
         programId,
-        channelId,
+        ChannelId,
         channelName,
         halfWidthChannelName,
         startAt.ToUnixTimeMilliseconds(),
-        endAt.ToUnixTimeMilliseconds(),
+        Interlocked.Read(ref currentEndAt),
         name,
         halfWidthName,
         description,

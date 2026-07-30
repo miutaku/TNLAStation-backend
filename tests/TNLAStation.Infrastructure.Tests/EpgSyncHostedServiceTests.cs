@@ -6,6 +6,7 @@ using TNLAStation.Application.Abstractions;
 using TNLAStation.Domain;
 using TNLAStation.Infrastructure.Configuration;
 using TNLAStation.Infrastructure.Mirakurun;
+using TNLAStation.Infrastructure.Reserves;
 
 namespace TNLAStation.Infrastructure.Tests;
 
@@ -22,10 +23,16 @@ public sealed class EpgSyncHostedServiceTests
     {
         var client = new FakeMirakurunClient();
         var store = new RecordingEpgStore();
-        using EpgSyncHostedService service = CreateService(client, store, out FakeTimeProvider time);
+        var reserveGeneration = new RecordingReserveGenerationTrigger();
+        using EpgSyncHostedService service = CreateService(
+            client,
+            store,
+            out FakeTimeProvider time,
+            reserveGeneration: reserveGeneration);
 
         await service.StartAsync(CancellationToken.None);
         await store.SnapshotCommitted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await reserveGeneration.Requested.Task.WaitAsync(TimeSpan.FromSeconds(5));
         // 停止そのものが失敗として記録され得るので、止める前の状態を判定する。
         IReadOnlyList<EpgSnapshot> committed = store.Snapshots;
         IReadOnlyList<string> failuresBeforeStop = store.Failures;
@@ -36,6 +43,7 @@ public sealed class EpgSyncHostedServiceTests
         Assert.Single(snapshot.Programs);
         Assert.Equal(Start, snapshot.CapturedAt);
         Assert.Empty(failuresBeforeStop);
+        Assert.True(reserveGeneration.RequestCount > 0);
     }
 
     [Fact]
@@ -101,7 +109,8 @@ public sealed class EpgSyncHostedServiceTests
         IMirakurunClient client,
         IEpgStore store,
         out FakeTimeProvider timeProvider,
-        IEpgSyncLeaseProvider? leaseProvider = null)
+        IEpgSyncLeaseProvider? leaseProvider = null,
+        IReserveGenerationTrigger? reserveGeneration = null)
     {
         timeProvider = new FakeTimeProvider(Start);
         return new EpgSyncHostedService(
@@ -109,10 +118,26 @@ public sealed class EpgSyncHostedServiceTests
             new MirakurunEpgMapper(Options.Create(new EpgOptions())),
             store,
             leaseProvider ?? new AlwaysAcquiredLeaseProvider(),
+            reserveGeneration ?? new NoReserveGenerationTrigger(),
             Options.Create(new MirakurunOptions { BaseUrl = "http://mirakurun.test" }),
             Options.Create(new EpgOptions()),
             timeProvider,
             NullLogger<EpgSyncHostedService>.Instance);
+    }
+
+    private sealed class RecordingReserveGenerationTrigger : IReserveGenerationTrigger
+    {
+        public int RequestCount { get; private set; }
+
+        public TaskCompletionSource Requested { get; } = new();
+
+        public ValueTask RequestAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RequestCount++;
+            Requested.TrySetResult();
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>

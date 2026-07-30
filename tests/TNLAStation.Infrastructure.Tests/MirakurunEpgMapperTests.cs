@@ -92,6 +92,52 @@ public sealed class MirakurunEpgMapperTests
     }
 
     [Fact]
+    public void AnUndeterminedDurationUsesTheNextProgramStart()
+    {
+        MirakurunEpgMapper mapper = CreateMapper();
+        DateTimeOffset startAt = UpdateTime.AddMinutes(-5);
+        MirakurunProgramDto current = CreateProgram(
+            eventId: 1,
+            startAt: startAt,
+            duration: 1,
+            name: "終了時刻未定のニュース");
+        MirakurunProgramDto next = CreateProgram(
+            eventId: 2,
+            startAt: UpdateTime.AddMinutes(30),
+            name: "次の番組");
+        IReadOnlyDictionary<(int NetworkId, int ServiceId), EpgChannel> index =
+            MirakurunEpgMapper.CreateChannelIndex(mapper.MapChannels([CreateService()]));
+
+        EpgProgram mapped = mapper.MapPrograms([current, next], index, UpdateTime)
+            .Single(program => program.Id == current.Id);
+
+        Assert.Equal(UpdateTime.AddMinutes(30), mapped.EndAt);
+        Assert.Equal((long)TimeSpan.FromMinutes(35).TotalMilliseconds, mapped.DurationMilliseconds);
+    }
+
+    [Fact]
+    public void AnOngoingUndeterminedDurationRollsPastAStaleNextProgram()
+    {
+        MirakurunEpgMapper mapper = CreateMapper(new EpgOptions { UpdateIntervalMinutes = 10 });
+        MirakurunProgramDto current = CreateProgram(
+            eventId: 1,
+            startAt: UpdateTime.AddHours(-1),
+            duration: 1,
+            name: "延長中のニュース");
+        MirakurunProgramDto staleNext = CreateProgram(
+            eventId: 2,
+            startAt: UpdateTime.AddMinutes(-10),
+            name: "開始できなかった次番組");
+        IReadOnlyDictionary<(int NetworkId, int ServiceId), EpgChannel> index =
+            MirakurunEpgMapper.CreateChannelIndex(mapper.MapChannels([CreateService()]));
+
+        EpgProgram mapped = mapper.MapPrograms([current, staleNext], index, UpdateTime)
+            .Single(program => program.Id == current.Id);
+
+        Assert.Equal(UpdateTime.AddMinutes(20), mapped.EndAt);
+    }
+
+    [Fact]
     public void UpToThreeGenresAreCarriedOverAndTheRestIgnored()
     {
         MirakurunEpgMapper mapper = CreateMapper();
@@ -182,6 +228,22 @@ public sealed class MirakurunEpgMapperTests
         Assert.True(MirakurunEpgMapper.IsMainProgram(CreateProgram(relatedItems: [
             new MirakurunRelatedItemDto { Type = "shared", EventId = 1, ServiceId = 1024 },
         ])));
+    }
+
+    [Fact]
+    public void RelayRelationsBecomeStableMirakurunProgramIds()
+    {
+        MirakurunEpgMapper mapper = CreateMapper();
+        EpgProgram program = MapSingleProgram(mapper, CreateProgram(relatedItems: [
+            new MirakurunRelatedItemDto
+            {
+                Type = "relay",
+                ServiceId = 1025,
+                EventId = 23901,
+            },
+        ]));
+
+        Assert.Equal([327_360_102_523_901L], program.RelayProgramIds);
     }
 
     [Fact]
