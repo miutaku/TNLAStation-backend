@@ -33,6 +33,8 @@ public sealed partial class EncodeWorker(
     TimeProvider timeProvider,
     ILogger<EncodeWorker> logger) : BackgroundService
 {
+    private static readonly TimeSpan CancellationPollInterval = TimeSpan.FromMilliseconds(500);
+
     private readonly CommandHookOptions hookOptions = commandHookOptions.Value;
 
     /// <summary>
@@ -376,6 +378,7 @@ public sealed partial class EncodeWorker(
     {
         using var leaseCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Task heartbeat = MaintainLeaseAsync(taskId, claimId, leaseCancellation);
+        Task cancellationMonitor = MonitorCancellationAsync(taskId, claimId, leaseCancellation);
         try
         {
             return await executor.RunAsync(
@@ -392,7 +395,46 @@ public sealed partial class EncodeWorker(
         finally
         {
             await leaseCancellation.CancelAsync();
-            await heartbeat;
+            await Task.WhenAll(heartbeat, cancellationMonitor);
+        }
+    }
+
+    private async Task MonitorCancellationAsync(
+        long taskId,
+        Guid claimId,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            while (!cancellation.IsCancellationRequested)
+            {
+                // キャンセル検知を10秒間隔のlease更新から分離する。録画・EPG用の
+                // TimeProvider が停止していても、実行中の外部プロセスは確実に止める。
+                await Task.Delay(CancellationPollInterval, cancellation.Token);
+                await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellation.Token);
+                bool canContinue = await context.EncodeTasks.AnyAsync(
+                    task =>
+                        task.Id == taskId &&
+                        task.ClaimId == claimId &&
+                        !task.CancelRequested,
+                    cancellation.Token);
+                if (canContinue)
+                {
+                    continue;
+                }
+
+                await cancellation.CancelAsync();
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return;
+        }
+        catch
+        {
+            // DBから実行権を確認できない場合は、重複実行を避けるためエンコードを止める。
+            await cancellation.CancelAsync();
         }
     }
 

@@ -137,7 +137,9 @@ public sealed class PostgresEncodeTaskList(
                     return;
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(200), timeProvider, timeout.Token);
+                // 録画・EPG用の TimeProvider は試験や補正で停止することがある。
+                // Worker の停止確認は経過時間で進め、疑似時計に引きずられないようにする。
+                await Task.Delay(TimeSpan.FromMilliseconds(200), timeout.Token);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
