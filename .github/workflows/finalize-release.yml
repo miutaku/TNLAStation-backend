@@ -1,0 +1,83 @@
+name: Verify and Finalize Release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Validate release merge
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+
+    steps:
+      - name: Validate release branch
+        id: release
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [[ ! "$HEAD_BRANCH" =~ ^release/(v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?)$ ]]; then
+            echo "Release branch must be named release/vX.Y.Z" >&2
+            exit 1
+          fi
+
+          echo "tag=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Verify merge commit
+    needs: release
+    uses: ./.github/workflows/ci.yml
+    with:
+      checkout_ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+  tag:
+    name: Tag and start release
+    needs:
+      - release
+      - verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: Checkout verified merge commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+
+      - name: Create version tag
+        env:
+          MERGE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "Tag $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$RELEASE_TAG" "$MERGE_COMMIT" --message "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+
+      - name: Start release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        run: >-
+          gh workflow run release.yml
+          --ref "${{ github.event.repository.default_branch }}"
+          --field "tag=$RELEASE_TAG"

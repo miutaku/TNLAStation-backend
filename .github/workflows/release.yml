@@ -4,14 +4,23 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release
+        required: true
+        type: string
 
 permissions:
   contents: write
   packages: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   container:
@@ -22,7 +31,7 @@ jobs:
     steps:
       - name: Validate version tag
         env:
-          VERSION_TAG: ${{ github.ref_name }}
+          VERSION_TAG: ${{ env.RELEASE_TAG }}
         run: |
           if [[ ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag must use SemVer, for example v1.2.3 or v1.2.3-rc.1" >&2
@@ -31,6 +40,18 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      # workflow_dispatch では、指定タグがこの生成スクリプト追加前のタグでも再リリースできるよう、
+      # リリース用ツールだけ既定ブランチから別ディレクトリへ取得する。
+      - name: Checkout release tooling
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .release-tooling
+          sparse-checkout: scripts/generate-release-notes.sh
 
       - name: Lint Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
@@ -60,10 +81,10 @@ jobs:
         with:
           images: ghcr.io/miutaku/tnlastation-backend
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
+            type=raw,value=latest,enable=${{ !contains(env.RELEASE_TAG, '-') }}
 
       - name: Generate ffmpeg-worker tags
         id: ffmpeg-worker
@@ -71,10 +92,10 @@ jobs:
         with:
           images: ghcr.io/miutaku/tnlastation-ffmpeg-worker
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
+            type=raw,value=latest,enable=${{ !contains(env.RELEASE_TAG, '-') }}
 
       - name: Publish backend image
         uses: docker/build-push-action@v7
@@ -102,8 +123,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --prerelease --title "$GITHUB_REF_NAME"
-          else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          .release-tooling/scripts/generate-release-notes.sh "$RELEASE_TAG" release-notes.md
+
+          release_args=(
+            "$RELEASE_TAG"
+            --verify-tag
+            --title "$RELEASE_TAG"
+            --notes-file release-notes.md
+          )
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_args+=(--prerelease)
           fi
+
+          gh release create "${release_args[@]}"

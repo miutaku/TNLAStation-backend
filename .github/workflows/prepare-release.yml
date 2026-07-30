@@ -1,0 +1,77 @@
+name: Prepare Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (for example 1.2.3 or v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  branch:
+    name: Create release branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate version
+        id: version
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          version="${VERSION_INPUT#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must use SemVer, for example 1.2.3 or 1.2.3-rc.1" >&2
+            exit 1
+          fi
+
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "branch=release/v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout default branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Ensure version is unused
+        env:
+          RELEASE_BRANCH: ${{ steps.version.outputs.branch }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            echo "Tag $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads origin "refs/heads/$RELEASE_BRANCH" >/dev/null; then
+            echo "Branch $RELEASE_BRANCH already exists" >&2
+            exit 1
+          fi
+
+      - name: Create release branch
+        env:
+          RELEASE_BRANCH: ${{ steps.version.outputs.branch }}
+        run: |
+          git switch --create "$RELEASE_BRANCH"
+          git push origin "$RELEASE_BRANCH"
+
+      - name: Add next steps to summary
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_BRANCH: ${{ steps.version.outputs.branch }}
+        run: |
+          {
+            echo "## Release branch created"
+            echo
+            echo "Open a pull request from \`$RELEASE_BRANCH\` to \`$DEFAULT_BRANCH\`."
+            echo "After the pull request is merged, the merge commit is verified, tagged, and released automatically."
+          } >> "$GITHUB_STEP_SUMMARY"

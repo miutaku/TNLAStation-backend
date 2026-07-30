@@ -1,15 +1,17 @@
 # リリース
 
-このリポジトリはSemantic Versioningを採用する。`main` のCI成功を確認後、
-メンテナーが `vX.Y.Z` タグをpushすると、`Release` workflowがbackendと
-ffmpeg-workerの両イメージをGHCRへ公開し、GitHub Releaseを自動生成する。
+このリポジトリはSemantic Versioningを採用する。リリースは必ず
+`release/vX.Y.Z` ブランチを経由し、検証済みのマージコミットから生成する。
 
-```sh
-git switch main
-git pull --ff-only
-git tag -a v1.2.3 -m "v1.2.3"
-git push origin v1.2.3
-```
+1. Actionsの `Prepare Release Branch` を開き、`1.2.3` または `v1.2.3` を入力する。
+2. 作成された `release/v1.2.3` から `main` へのPull Requestを作成する。
+3. 必要なリリース向け修正をそのブランチへ追加し、Pull RequestのCIを通す。
+4. Pull Requestを `main` へマージする。
+5. `Verify and Finalize Release` がマージコミットに対してCI全体を再実行する。
+6. 検証成功後、同ワークフローが `v1.2.3` タグを作成し、`Release` を起動する。
+
+検証前にタグを手動作成しないこと。リリースブランチ名とタグは一対一であり、
+既存のブランチ名またはタグは再利用できない。
 
 正式版には `1.2.3`、`1.2`、`1`、`latest` が付く。
 `v1.2.3-rc.1` のようなプレリリースは完全バージョンだけを公開し、
