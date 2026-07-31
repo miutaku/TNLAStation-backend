@@ -15,7 +15,7 @@ namespace TNLAStation.Api.Tests;
 /// <summary>
 /// socket.io の互換試験。
 ///
-/// 上流は <c>EPGStation/src/model/service/socketio/SocketIOManageModel.ts</c> と
+/// EPGStation は <c>EPGStation/src/model/service/socketio/SocketIOManageModel.ts</c> と
 /// <c>ServiceServer.ts</c>。公開されているのは <c>updateStatus</c> と <c>updateEncode</c> の
 /// 2 イベントだけで、どちらも payload を持たず、200ms で束ねられる。
 /// パスは subDirectory が無ければ <c>/socket.io</c>、あれば <c>urljoin(subDirectory, '/socket.io')</c>。
@@ -33,7 +33,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
         using HttpResponseMessage response = await client.GetAsync("/socket.io/?EIO=4&transport=polling");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("text/plain", response.Content.Headers.ContentType?.MediaType);
-        // 上流は cors: { origin: '*' } を socket.io サーバー自身に持たせている。
+        // EPGStation は cors: { origin: '*' } を socket.io サーバー自身に持たせている。
         Assert.Equal("*", string.Join(',', response.Headers.GetValues("Access-Control-Allow-Origin")));
 
         string payload = await response.Content.ReadAsStringAsync();
@@ -130,7 +130,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
     }
 
     /// <summary>
-    /// 上流は <c>callTimer</c> が立っている間の呼び出しを捨てる。連続で叩いても 1 本しか飛ばない。
+    /// EPGStation は <c>callTimer</c> が立っている間の呼び出しを捨てる。連続で叩いても 1 本しか飛ばない。
     /// </summary>
     [Fact]
     public async Task RepeatedNotificationsInsideTheWindowCollapseIntoOneEvent()
@@ -155,7 +155,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
 
     /// <summary>
     /// <c>updateStatus</c> と <c>updateEncode</c> は別々のタイマーで間引かれるので、
-    /// 同じ窓に両方入っても 2 本とも飛ぶ (上流も <c>callTimer</c> と
+    /// 同じ窓に両方入っても 2 本とも飛ぶ (EPGStation も <c>callTimer</c> と
     /// <c>encodeProgressCallTimer</c> を分けている)。
     /// </summary>
     [Fact]
@@ -225,7 +225,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
     }
 
     /// <summary>
-    /// 状態を変える要求のあとに <c>updateStatus</c> が飛ぶこと。上流は EventSetter が繋いだ
+    /// 状態を変える要求のあとに <c>updateStatus</c> が飛ぶこと。EPGStation は EventSetter が繋いだ
     /// イベント経由で <c>ipc.notifyClient()</c> を呼ぶ。
     /// </summary>
     [Fact]
@@ -244,7 +244,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
         Assert.Equal("42[\"updateStatus\"]", await ReceiveAsync(socket));
     }
 
-    /// <summary>参照系では鳴らない。上流も読み取りではイベントを発火しない。</summary>
+    /// <summary>参照系では鳴らない。EPGStation も読み取りではイベントを発火しない。</summary>
     [Fact]
     public async Task AReadOnlyRequestDoesNotPushAnything()
     {
@@ -285,7 +285,7 @@ public sealed class SocketIoCompatibilityTests : IDisposable
     }
 
     /// <summary>
-    /// 上流の <c>ServiceServer.start</c> は <c>socketioPort === port</c> のとき HTTP サーバーへ
+    /// EPGStation の <c>ServiceServer.start</c> は <c>socketioPort === port</c> のとき HTTP サーバーへ
     /// 相乗りし、違うときだけ別の待受を作る。<c>clientSocketioPort</c> は待受先に影響しない。
     /// </summary>
     [Theory]

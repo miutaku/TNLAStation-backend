@@ -113,7 +113,7 @@ public sealed class PostgresRecordedRepositoryTests
     }
 
     /// <summary>
-    /// 空き容量不足で消す候補の選び方。上流の <c>RecordedDB.findOld()</c> は
+    /// 空き容量不足で消す候補の選び方。EPGStation の <c>RecordedDB.findOld()</c> は
     /// 「保護されていない行のうち id がいちばん小さいもの」で、保存先でも録画中かどうかでも
     /// 絞らない。<c>orderBy</c> を 2 回呼んでいて後勝ちになるため、開始時刻順ではなく登録順。
     /// </summary>
@@ -128,7 +128,7 @@ public sealed class PostgresRecordedRepositoryTests
         long first = await AddRecordedAsync(repository, "後で始まる番組", startOffsetHours: 5);
         long second = await AddRecordedAsync(repository, "先に始まる番組", startOffsetHours: 0);
 
-        // 開始時刻順なら second が選ばれるが、上流は id 順なので first。
+        // 開始時刻順なら second が選ばれるが、EPGStation は id 順なので first。
         Assert.Equal(first, await repository.FindOldestUnprotectedAsync(CancellationToken.None));
 
         // 保護すると候補から外れる。

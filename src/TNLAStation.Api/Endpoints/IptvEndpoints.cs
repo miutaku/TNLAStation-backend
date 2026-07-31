@@ -11,7 +11,7 @@ namespace TNLAStation.Api.Endpoints;
 
 /// <summary>
 /// テレビ用の再生機へ渡す一覧と番組表。取り込む側は決まった形しか読まないので、
-/// 上流と同じ書きかたに合わせる。
+/// EPGStation と同じ書きかたに合わせる。
 /// </summary>
 internal static class IptvEndpoints
 {
@@ -82,7 +82,7 @@ internal static class IptvEndpoints
         IReadOnlyList<EpgProgram> programs = await repository.FindProgramsAsync(
             new EpgScheduleQuery(now, now.AddDays(days), ["GR", "BS", "CS", "SKY"]),
             cancellationToken);
-        // 上流は番組が 1 つも無いチャンネルを channel 要素ごと省く。
+        // EPGStation は番組が 1 つも無いチャンネルを channel 要素ごと省く。
         HashSet<long> channelIdsWithPrograms = [.. programs.Select(program => program.ChannelId)];
         channels = [.. channels.Where(channel => channelIdsWithPrograms.Contains(channel.Id))];
 

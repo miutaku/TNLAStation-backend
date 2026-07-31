@@ -93,7 +93,7 @@ internal static class RecordedEndpoints
     }
 
     /// <summary>
-    /// 録画を消す。上流は録画中でも「消す」で受け付け、まず録画を止めてから消す
+    /// 録画を消す。EPGStation は録画中でも「消す」で受け付け、まず録画を止めてから消す
     /// (画面の「削除」ボタンは録画中・録画済みの両方をこれ 1 本で扱う)。
     /// 存在チェックはせず、常に 200 で答える。
     /// </summary>
@@ -103,7 +103,7 @@ internal static class RecordedEndpoints
         IRecordingStopService stopService,
         CancellationToken cancellationToken)
     {
-        // 上流 (RecordedManageModel.delete) はここで存在チェックとプロテクトチェックをしており、
+        // EPGStation (RecordedManageModel.delete) はここで存在チェックとプロテクトチェックをしており、
         // 無ければ RecordedIdIsNotFound、プロテクト中なら RecordedIsProtected を投げて 500 になる。
         RecordedProgram? existing = await repository.GetAsync(recordedId, cancellationToken);
         if (existing is null)
@@ -160,7 +160,7 @@ internal static class RecordedEndpoints
         IRecordedItemRepository repository,
         CancellationToken cancellationToken)
     {
-        // 上流は片付いた件数を返さず { code: 200 } だけを返す (recorded/cleanup.ts)。
+        // EPGStation は片付いた件数を返さず { code: 200 } だけを返す (recorded/cleanup.ts)。
         // 件数を足すと互換クライアントから見て未知の鍵が増えるので、内部の結果は捨てる。
         _ = await repository.CleanupAsync(cancellationToken);
         return Results.Ok(new ResultCodeResponse(StatusCodes.Status200OK));

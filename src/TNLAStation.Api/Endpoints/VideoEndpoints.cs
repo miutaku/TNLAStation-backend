@@ -81,7 +81,7 @@ internal static class VideoEndpoints
         IMediaProbe probe,
         CancellationToken cancellationToken)
     {
-        // 上流 (VideoApiModel.getDuration) はここを 404 ではなく VideoFileIsUndefined 例外にして
+        // EPGStation (VideoApiModel.getDuration) はここを 404 ではなく VideoFileIsUndefined 例外にして
         // おり、汎用の 500 として返る (ファイル取得 GET の 404 とは扱いが違う)。
         VideoFileLocation? file = await repository.GetAsync(videoFileId, cancellationToken);
         if (file is null || !File.Exists(file.FullPath))
@@ -143,7 +143,7 @@ internal static class VideoEndpoints
         IFormFile? file = form.Files["file"];
         if (file is null)
         {
-            // 上流 (videos/upload の post) はファイルが無いと FileIsNotFound を投げて 500 になる。
+            // EPGStation (videos/upload の post) はファイルが無いと FileIsNotFound を投げて 500 になる。
             throw new InvalidOperationException("FileIsNotFound");
         }
 
@@ -152,7 +152,7 @@ internal static class VideoEndpoints
         string fileType = form["fileType"].ToString();
         string? subDirectory = form["subDirectory"].ToString() is { Length: > 0 } value ? value : null;
 
-        // recordedId が数値ですらない・対応する録画が無い、のどちらも上流では区別されず
+        // recordedId が数値ですらない・対応する録画が無い、のどちらも EPGStation では区別されず
         // RecordedIdIsNull になる (recordedDB.findId が null を返す先と同じ経路)。
         long? id = long.TryParse(form["recordedId"], CultureInfo.InvariantCulture, out long recordedId)
             ? await UploadFileAsync(repository, recordedId, file, parentDirectoryName, viewName, fileType, subDirectory, cancellationToken)
@@ -203,7 +203,7 @@ internal static class VideoEndpoints
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // 上流 (VideoApiModel.sendToKodi) は kodi 送り先名と動画の存在チェックをしており、
+        // EPGStation (VideoApiModel.sendToKodi) は kodi 送り先名と動画の存在チェックをしており、
         // 無ければそれぞれ KodiHostIsUndefined / VideoFileIsUndefined を投げて 500 になる。
         if (!kodi.HostNames.Contains(request.KodiName, StringComparer.Ordinal))
         {
@@ -229,7 +229,7 @@ internal static class VideoEndpoints
         IRecordedItemRepository recordedRepository,
         CancellationToken cancellationToken)
     {
-        // 上流 (deleteVideoFile) はここで存在チェックとプロテクトチェックをしており、無ければ
+        // EPGStation (deleteVideoFile) はここで存在チェックとプロテクトチェックをしており、無ければ
         // VideoFileIsNotFound、プロテクト中なら RecordedIsProtected を投げて 500 になる。
         VideoFileLocation? file = await repository.GetAsync(videoFileId, cancellationToken);
         if (file is null)

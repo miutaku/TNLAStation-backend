@@ -13,9 +13,9 @@ public sealed class SocketIoClientNotifier(SocketIoHub hub) : IClientNotifier
 /// <summary>
 /// 状態を変える HTTP 要求が成功したあとに <c>updateStatus</c> を流す。
 ///
-/// 上流は各操作の中から <c>ipc.notifyClient()</c> を呼ぶ (EventSetter が繋いでいる)。
-/// 対象は下の表のとおりで、上流が鳴らさない操作 (配信の keep、参照系) は含めない。
-/// 失敗した要求では鳴らさない — 上流も、イベントを発火する処理まで到達しなければ鳴らない。
+/// EPGStation は各操作の中から <c>ipc.notifyClient()</c> を呼ぶ (EventSetter が繋いでいる)。
+/// 対象は下の表のとおりで、EPGStation が鳴らさない操作 (配信の keep、参照系) は含めない。
+/// 失敗した要求では鳴らさない — EPGStation も、イベントを発火する処理まで到達しなければ鳴らない。
 /// </summary>
 internal sealed class SocketIoNotifyMiddleware(RequestDelegate next)
 {

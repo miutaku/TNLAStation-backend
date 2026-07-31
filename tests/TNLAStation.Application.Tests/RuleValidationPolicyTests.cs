@@ -3,7 +3,7 @@ using TNLAStation.Application.Models;
 namespace TNLAStation.Application.Tests;
 
 /// <summary>
-/// ルールの追加・更新時に上流 (ReserveOptionChecker.checkRuleOption) がかけている検査を、
+/// ルールの追加・更新時に EPGStation (ReserveOptionChecker.checkRuleOption) がかけている検査を、
 /// HTTP を通さず分岐ごとに固定する。<see cref="EpgSearchPolicy.Validate"/> (検索そのものの
 /// 空条件チェック) とは別物 — こちらはルールとして保存できる形かどうかを見る。
 /// </summary>
@@ -62,7 +62,7 @@ public sealed class RuleValidationPolicyTests
     [Fact]
     public void KeywordFlagsSetWithoutAKeywordAreRejected()
     {
-        // 上流は keyword が無いのに cs/regExp/name/description/extended が立っていると弾く。
+        // EPGStation は keyword が無いのに cs/regExp/name/description/extended が立っていると弾く。
         var rule = new RecordingRule(
             1,
             IsTimeSpecification: false,

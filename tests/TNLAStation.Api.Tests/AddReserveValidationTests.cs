@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace TNLAStation.Api.Tests;
 
 /// <summary>
-/// 上流の予約追加は、番組指定なら「既に何かがその番組を掴んでいないか」、時刻指定なら
+/// EPGStation の予約追加は、番組指定なら「既に何かがその番組を掴んでいないか」、時刻指定なら
 /// 「終了時刻が過去でないか」「同じ条件の予約が既にないか」をチェックし、失敗はどれも
 /// 汎用のサーバエラー (500 + code/message/errors) として返る。専用の 400 は無い。
 /// </summary>
@@ -84,7 +84,7 @@ public sealed class AddReserveValidationTests : IDisposable
     [Fact]
     public async Task AddingAReserveWithAnUnconfiguredEncodeModeFails()
     {
-        // 上流 (checkManualReserveOption -> checkEncodeOption) は config に無いモード名を
+        // EPGStation (checkManualReserveOption -> checkEncodeOption) は config に無いモード名を
         // 拒む。テスト用ホストには encode モードが設定されていない。
         var request = new
         {

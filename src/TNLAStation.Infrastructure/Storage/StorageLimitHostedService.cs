@@ -116,7 +116,7 @@ public sealed partial class StorageLimitHostedService(
             }
 
             // 完了を待たない。通知コマンドなどを想定しており、遅い/固まるコマンドで空き容量の
-            // 監視自体を止めたくない。環境変数は親からそのまま継承する — 上流も limitCmd だけは
+            // 監視自体を止めたくない。環境変数は親からそのまま継承する — EPGStation も limitCmd だけは
             // 「互換性のためここでは全ての環境変数を渡すため env は未指定」と明記して
             // spawn へ env を渡していない (StorageManageModel.check)。
             Process.Start(startInfo)?.Dispose();

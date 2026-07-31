@@ -6,7 +6,7 @@ namespace TNLAStation.Infrastructure.Configuration;
 ///
 /// <c>socketioPort</c> は「socket.io を待ち受けるポート」、<c>clientSocketioPort</c> は
 /// 「<c>/api/config</c> の <c>socketIOPort</c> としてクライアントへ知らせるポート」で意味が違う。
-/// 上流の <c>ServiceServer.start</c> と <c>ConfigApiModel.getConfig</c> がその使い分けの根拠。
+/// EPGStation の <c>ServiceServer.start</c> と <c>ConfigApiModel.getConfig</c> がその使い分けの根拠。
 /// </summary>
 public sealed class ServerOptions
 {

@@ -60,7 +60,7 @@ public sealed class ReserveGenerationPolicyTests
     [Fact]
     public void TwoServicesOnTheSamePhysicalChannelShareASingleTuner()
     {
-        // 上流の Tuner.add は物理チャンネル (channel) で相乗り可否を決める。ChannelId (サービス)
+        // EPGStation の Tuner.add は物理チャンネル (channel) で相乗り可否を決める。ChannelId (サービス)
         // が違っても、同じ物理チャンネルに多重化された別サービスなら 1 本のチューナーで録れる。
         ReserveGenerationInput input = CreateInput(
             rules: [CreateRule(keyword: "ニュース")],
@@ -148,7 +148,7 @@ public sealed class ReserveGenerationPolicyTests
     [Fact]
     public void ARuleAlsoReservesAProgramThatIsAlreadyReservedByHand()
     {
-        // 上流はルール側で手動予約との重複を除外しない。同じ番組を手動とルールの両方が
+        // EPGStation はルール側で手動予約との重複を除外しない。同じ番組を手動とルールの両方が
         // 掴むと、見た目には重複した予約が並ぶ (二重登録を拒否するのは追加時のエラーだけで、
         // ルール生成側までは防がない非対称な仕様)。同じ番組は channel も同じになるので、
         // チューナーは相乗りになり競合にはならない。
@@ -200,7 +200,7 @@ public sealed class ReserveGenerationPolicyTests
     [Fact]
     public void AvoidDuplicateDoesNotMatchTheSameNameOnADifferentChannel()
     {
-        // 上流は番組名だけでなく放送局も一致する場合だけ重複と見なす。同名の別局再放送を
+        // EPGStation は番組名だけでなく放送局も一致する場合だけ重複と見なす。同名の別局再放送を
         // 重複扱いにすると、録るべきものを録り逃す。
         RecordingRule rule = CreateRule(keyword: "ニュース");
         ReserveGenerationInput input = CreateInput(

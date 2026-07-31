@@ -85,7 +85,7 @@ internal static class EpgStationEndpoints
 
     /// <summary>
     /// EPGStation の <c>api.isSecureProtocol</c>。<c>X-Forwarded-Proto</c> が丁度 <c>https</c> か、
-    /// 接続そのものが https のとき真。express は header 名を小文字に正規化するので、上流の
+    /// 接続そのものが https のとき真。express は header 名を小文字に正規化するので、EPGStation の
     /// 大小 2 通りの検査は同じ 1 つの検査になる。
     /// </summary>
     private static bool IsSecureProtocol(HttpRequest request) =>
@@ -244,7 +244,7 @@ internal static class EpgStationEndpoints
                     request.EncodeOption.Directory3,
                     request.EncodeOption.IsDeleteOriginalAfterEncode));
 
-        // 上流 (checkManualReserveOption) はここでもエンコードオプションを検査しており、
+        // EPGStation (checkManualReserveOption) はここでもエンコードオプションを検査しており、
         // 落ちると AddReservationOptionError が汎用の 500 として返る。
         if (!EncodeOptionValidationPolicy.IsValid(
             command.Encode, [.. encodeOptions.Value.Modes.Select(mode => mode.Name)], encodeOptions.Value.Modes.Count > 0))

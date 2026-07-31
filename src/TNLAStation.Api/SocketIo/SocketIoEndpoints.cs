@@ -10,7 +10,7 @@ namespace TNLAStation.Api.SocketIo;
 /// <summary>
 /// EPGStation 互換の socket.io を待ち受ける。
 ///
-/// 上流は <c>SocketIOManageModel.initialize</c> で
+/// EPGStation は <c>SocketIOManageModel.initialize</c> で
 /// <c>path: subDirectory 無し → '/socket.io'、有り → urljoin(subDirectory, '/socket.io')</c>、
 /// <c>cors: { origin: '*' }</c> の Socket.IO サーバーを立てる。ここも同じパスと CORS で待つ。
 ///
@@ -24,7 +24,7 @@ internal static class SocketIoEndpoints
     public static IEndpointRouteBuilder MapSocketIoEndpoints(this IEndpointRouteBuilder endpoints)
     {
         // subDirectory は UsePathBase が剥がすので、ここでは常に /socket.io で受ける。
-        // 上流の urljoin(subDirectory, '/socket.io') と同じ URL になる。
+        // EPGStation の urljoin(subDirectory, '/socket.io') と同じ URL になる。
         endpoints.Map("/socket.io/{**rest}", HandleAsync).ExcludeFromDescription();
         endpoints.Map("/socket.io", HandleAsync).ExcludeFromDescription();
 
@@ -32,11 +32,11 @@ internal static class SocketIoEndpoints
     }
 
     /// <summary>
-    /// 上流が公開しているのは 1 本のパスだけで、転送方式は query の <c>transport</c> で分かれる。
+    /// EPGStation が公開しているのは 1 本のパスだけで、転送方式は query の <c>transport</c> で分かれる。
     /// </summary>
     private static async Task HandleAsync(HttpContext context, SocketIoHub hub)
     {
-        // 上流は cors: { origin: '*' }。socket.io は自前で CORS を付けるので、アプリ全体の
+        // EPGStation は cors: { origin: '*' }。socket.io は自前で CORS を付けるので、アプリ全体の
         // isAllowAllCORS とは独立に常に許可する。
         context.Response.Headers.AccessControlAllowOrigin = "*";
 
@@ -260,7 +260,7 @@ internal static class SocketIoEndpoints
 
 
     /// <summary>
-    /// クライアントから来たパケットを処理する。上流はクライアント発のイベントを 1 つも
+    /// クライアントから来たパケットを処理する。EPGStation はクライアント発のイベントを 1 つも
     /// 購読していないので、ここも接続・切断・ping/pong だけを扱う。
     /// </summary>
     private static void HandleIncoming(SocketIoSession session, string packet)
@@ -340,7 +340,7 @@ public static class SocketIoListener
         return server.Https?.SocketIoPort;
     }
 
-    /// <summary>socket.io のパス。上流の <c>urljoin(subDirectory, '/socket.io')</c> と同じ。</summary>
+    /// <summary>socket.io のパス。EPGStation の <c>urljoin(subDirectory, '/socket.io')</c> と同じ。</summary>
     public static string ResolvePath(string? subDirectory) =>
         string.IsNullOrEmpty(subDirectory) ? "/socket.io" : UrlJoin.Join(subDirectory, "/socket.io");
 }

@@ -30,7 +30,7 @@ public sealed class RuleApiContractTests : IDisposable
 
     public RuleApiContractTests()
     {
-        // RuleUpdateReplacesTheStoredOptions が使う mode1/mode2 は、上流の
+        // RuleUpdateReplacesTheStoredOptions が使う mode1/mode2 は、EPGStation の
         // checkEncodeOption と同じく config に無い名前だと弾かれるので用意しておく。
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
@@ -218,7 +218,7 @@ public sealed class RuleApiContractTests : IDisposable
         Assert.Equal(1_800_086_400_000L, rule.GetProperty("searchOption").GetProperty("searchPeriods")[0].GetProperty("endAt").GetInt64());
         Assert.Equal(6, rule.GetProperty("reserveOption").GetProperty("periodToAvoidDuplicate").GetInt32());
         Assert.Equal(2, rule.GetProperty("reserveOption").GetProperty("tags").GetArrayLength());
-        // priority は上流の schema にも実装にも無い。未知の鍵として送っても無視され、応答にも出ない。
+        // priority は EPGStation の schema にも実装にも無い。未知の鍵として送っても無視され、応答にも出ない。
         Assert.False(rule.GetProperty("reserveOption").TryGetProperty("priority", out _));
         Assert.Equal("recorded", rule.GetProperty("saveOption").GetProperty("parentDirectoryName").GetString());
         Assert.Equal("anime", rule.GetProperty("saveOption").GetProperty("directory").GetString());
@@ -250,7 +250,7 @@ public sealed class RuleApiContractTests : IDisposable
     [Fact]
     public async Task UpdatingAMissingRuleReturnsTheUpstream500Shape()
     {
-        // 上流の RuleManageModel.update だけが存在チェックをしており、無ければ
+        // EPGStation の RuleManageModel.update だけが存在チェックをしており、無ければ
         // RuleIsNotFound を投げて 500 になる。
         using HttpResponseMessage update = await client.PutAsJsonAsync("/api/rules/9999", CreateRuleRequest("欠番"), RequestOptions);
         Assert.Equal(HttpStatusCode.InternalServerError, update.StatusCode);
@@ -263,7 +263,7 @@ public sealed class RuleApiContractTests : IDisposable
     [Fact]
     public async Task TogglingAMissingRuleReturnsRuleIsNull()
     {
-        // 上流の enable/disable は対象が無いと RuleIsNull を投げる。
+        // EPGStation の enable/disable は対象が無いと RuleIsNull を投げる。
         using HttpResponseMessage enable = await client.PutAsync("/api/rules/9999/enable", content: null);
         Assert.Equal(HttpStatusCode.InternalServerError, enable.StatusCode);
         using JsonDocument enableBody = await ReadJsonAsync(enable);

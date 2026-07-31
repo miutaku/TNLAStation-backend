@@ -94,7 +94,7 @@ public sealed class CommandHookRunnerTests
     }
 
     /// <summary>
-    /// 上流の <c>spawn</c> は <c>env</c> を丸ごと差し替える (<c>{ PATH, RESERVEID, ... }</c>)。
+    /// EPGStation の <c>spawn</c> は <c>env</c> を丸ごと差し替える (<c>{ PATH, RESERVEID, ... }</c>)。
     /// 親の環境が漏れるとスクリプトの挙動が変わるので、PATH 以外は渡さないことを固定する。
     /// 根拠: EPGStation/src/model/operator/externalCommand/ExternalCommandManageModel.ts。
     /// </summary>
@@ -137,7 +137,7 @@ public sealed class CommandHookRunnerTests
             Assert.False(variables.ContainsKey(marker));
             Assert.True(variables.ContainsKey("PATH"));
 
-            // /bin/sh 自身が起動時に足す変数は、上流でも同じように現れるので数に入れない。
+            // /bin/sh 自身が起動時に足す変数は、EPGStation でも同じように現れるので数に入れない。
             string[] shellInjected = ["PWD", "SHLVL", "_", "OLDPWD"];
             Assert.Equal(
                 [
@@ -202,7 +202,7 @@ public sealed class CommandHookRunnerTests
     }
 
     /// <summary>
-    /// エンコード完了フックだけは、上流が <c>''</c> を入れている場所がある。
+    /// エンコード完了フックだけは、EPGStation が <c>''</c> を入れている場所がある。
     /// 根拠: <c>createFinishEncodeCmd</c> の <c>VIDEOFILEID</c> と <c>DESCRIPTION</c> 系。
     /// </summary>
     [Fact]

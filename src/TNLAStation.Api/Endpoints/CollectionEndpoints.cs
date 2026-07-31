@@ -130,7 +130,7 @@ internal static class CollectionEndpoints
         CancellationToken cancellationToken)
     {
         // 検索の選択肢は録画済みの中身から作る。録画が 1 件も無ければ選択肢も空になる。
-        // 上流は録画中かどうかを区別せず数えるので、録画中も合わせて集計する。
+        // EPGStation は録画中かどうかを区別せず数えるので、録画中も合わせて集計する。
         RecordedQuery query = new(IsHalfWidth: false, Offset: 0, Limit: int.MaxValue);
         Page<RecordedProgram> page = await repository.ListAsync(query, cancellationToken);
         Page<RecordedProgram> recordingPage = await recording.ListAsync(query, cancellationToken);
@@ -159,7 +159,7 @@ internal static class CollectionEndpoints
             new ReserveQuery(IsHalfWidth: false, Offset: 0, Limit: int.MaxValue, Type: "all"),
             cancellationToken);
 
-        // 1 件の予約は 1 つの種別にだけ数える。上流は skip と overlap を優先し、
+        // 1 件の予約は 1 つの種別にだけ数える。EPGStation は skip と overlap を優先し、
         // どちらでもない競合を conflicts、残りを normal として数える。
         int skips = page.Items.Count(reserve => reserve.IsSkip);
         int overlaps = page.Items.Count(reserve => !reserve.IsSkip && reserve.IsOverlap);
@@ -194,8 +194,8 @@ internal static class CollectionEndpoints
             throw new InvalidOperationException("OptionError");
         }
 
-        // 上流 (EncodeManageModel.push) は concurrentEncodeNum が 0 以下だと、待ち行列へ積む前に
-        // 例外を投げる。綴りも上流のまま (Cncurrent…) にしておかないと errors 文字列が変わる。
+        // EPGStation (EncodeManageModel.push) は concurrentEncodeNum が 0 以下だと、待ち行列へ積む前に
+        // 例外を投げる。綴りも EPGStation のまま (Cncurrent…) にしておかないと errors 文字列が変わる。
         if (encodeOptions.Value.ConcurrentEncodeNum <= 0)
         {
             throw new InvalidOperationException("CncurrentEncodeNumIsZero");
@@ -212,7 +212,7 @@ internal static class CollectionEndpoints
                 request.IsSaveSameDirectory ?? false),
             cancellationToken);
 
-        // 上流は responseJSON で 201 を返すだけで Location を付けない。付けると header が増える。
+        // EPGStation は responseJSON で 201 を返すだけで Location を付けない。付けると header が増える。
         return Results.Json(new AddedEncodeResponse(encodeId), statusCode: StatusCodes.Status201Created);
     }
 

@@ -32,7 +32,7 @@ public interface IRecordedRepository
     /// 保護されていない録画のうち、行 id がいちばん小さいものの id。空き容量が足りないときに
     /// 何を消すかを決めるためだけに使う。無ければ null。
     ///
-    /// 上流の <c>RecordedDB.findOld()</c> をそのまま写している。保存先で絞らず (どの保存先が
+    /// EPGStation の <c>RecordedDB.findOld()</c> をそのまま写している。保存先で絞らず (どの保存先が
     /// 足りなくても全体から選ぶ)、録画中も除外しない。並びは <c>orderBy</c> を 2 回呼んでいて
     /// TypeORM では後の呼び出しが前を置き換えるため、実際には <c>recorded.id ASC</c> だけが効く
     /// — 開始時刻順ではなく登録順になる。
@@ -50,7 +50,7 @@ public interface IReserveRepository
 
     /// <summary>
     /// 予約を取り消す。手動予約は消えるが、ルールが作った予約は消しても次の生成で戻ってくる
-    /// ので、除外として残す。上流も同じで、画面の「削除」はこの 2 つを兼ねている。
+    /// ので、除外として残す。EPGStation も同じで、画面の「削除」はこの 2 つを兼ねている。
     /// </summary>
     ValueTask<bool> DeleteAsync(long reserveId, CancellationToken cancellationToken);
 

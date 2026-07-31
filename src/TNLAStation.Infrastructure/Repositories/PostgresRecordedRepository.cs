@@ -39,8 +39,8 @@ public sealed class PostgresRecordedRepository(
     {
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // 上流 (RecordedDB.findOld) は保護状態だけで絞る。保存先も録画中かどうかも見ない。
-        // 並びは id 昇順 (上流の 2 度目の orderBy が startAt の指定を上書きするため)。
+        // EPGStation (RecordedDB.findOld) は保護状態だけで絞る。保存先も録画中かどうかも見ない。
+        // 並びは id 昇順 (EPGStation の 2 度目の orderBy が startAt の指定を上書きするため)。
         return await context.Recorded.AsNoTracking()
             .Where(item => !item.IsProtected)
             .OrderBy(item => item.Id)

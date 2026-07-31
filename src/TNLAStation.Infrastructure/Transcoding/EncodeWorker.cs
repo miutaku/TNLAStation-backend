@@ -268,7 +268,7 @@ public sealed partial class EncodeWorker(
         LogEncodeFinished(logger, filename, file.Exists ? file.Length : 0);
 
         long channelId = recordedInfo?.ChannelId ?? 0;
-        // 上流は EncodeFinishModel が notifyClient と notifyUpdateEncodeProgress の両方を鳴らす。
+        // EPGStation は EncodeFinishModel が notifyClient と notifyUpdateEncodeProgress の両方を鳴らす。
         notifier.NotifyClient();
         notifier.NotifyUpdateEncodeProgress();
         hooks.RunEncodeFinishHook(hookOptions.EncodingFinishCommand, new EncodeFinishHookPayload(

@@ -8,16 +8,16 @@ namespace TNLAStation.Infrastructure.CommandHooks;
 /// <summary>
 /// 設定された外部コマンドを実行する。
 ///
-/// 上流は <c>EPGStation/src/model/operator/externalCommand/ExternalCommandManageModel.ts</c>。
+/// EPGStation は <c>EPGStation/src/model/operator/externalCommand/ExternalCommandManageModel.ts</c>。
 /// 環境変数の作り方が外から見えるので、次の 3 点を写している。
 ///
-/// 1. 親の環境は受け継がない。上流の <c>spawn(..., { env: { PATH: process.env['PATH'], ... } })</c> は
+/// 1. 親の環境は受け継がない。EPGStation の <c>spawn(..., { env: { PATH: process.env['PATH'], ... } })</c> は
 ///    <c>env</c> を丸ごと置き換えるので、子プロセスから見えるのは <c>PATH</c> と各フックの変数だけ。
 ///    継承させると、スクリプトが偶然同名の変数を拾って挙動が変わる。
 /// 2. <c>null</c> は文字列 <c>"null"</c> になる。Node は <c>`${key}=${value}`</c> で組み立てるため。
 ///    値が <c>undefined</c> のものだけが変数ごと消える。
 /// 3. どこが <c>null</c> でどこが空文字かはフックごとに違う。エンコード完了だけは
-///    <c>VIDEOFILEID</c>・<c>DESCRIPTION</c> 系を空文字にしており、それも上流のまま。
+///    <c>VIDEOFILEID</c>・<c>DESCRIPTION</c> 系を空文字にしており、それも EPGStation のまま。
 /// </summary>
 public sealed partial class CommandHookRunner(ILogger<CommandHookRunner> logger) : ICommandHookRunner
 {
@@ -96,7 +96,7 @@ public sealed partial class CommandHookRunner(ILogger<CommandHookRunner> logger)
 
         ArgumentNullException.ThrowIfNull(payload);
 
-        // 上流の createFinishEncodeCmd は、ここだけ null ではなく空文字を入れる箇所がある。
+        // EPGStation の createFinishEncodeCmd は、ここだけ null ではなく空文字を入れる箇所がある。
         Run(command, new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["RECORDEDID"] = Number(payload.RecordedId),
@@ -138,7 +138,7 @@ public sealed partial class CommandHookRunner(ILogger<CommandHookRunner> logger)
                 startInfo.ArgumentList.Add(argument);
             }
 
-            // 親の環境をそのまま渡さない。上流が渡すのは PATH とフックの変数だけ。
+            // 親の環境をそのまま渡さない。EPGStation が渡すのは PATH とフックの変数だけ。
             startInfo.Environment.Clear();
             if (Environment.GetEnvironmentVariable("PATH") is { } path)
             {

@@ -1,10 +1,10 @@
 namespace TNLAStation.Application.Models;
 
 /// <summary>
-/// ルールの追加・更新時に上流 (ReserveOptionChecker.checkRuleOption) がかけている検査。
+/// ルールの追加・更新時に EPGStation (ReserveOptionChecker.checkRuleOption) がかけている検査。
 /// 番組検索そのものの検査 (<see cref="EpgSearchPolicy.Validate"/>, 空条件や
 /// InvalidFindRuleOption) とは別物 — こちらはルールを保存できる形かどうかを見る。
-/// 上流はここで落ちると AddRuleError/UpdateRuleError を投げ、汎用の 500 になる。
+/// EPGStation はここで落ちると AddRuleError/UpdateRuleError を投げ、汎用の 500 になる。
 /// </summary>
 public static class RuleValidationPolicy
 {

@@ -72,7 +72,7 @@ public sealed class DeleteRecordedStopsActiveRecordingTests : IDisposable
     [Fact]
     public async Task DeletingAProtectedRecordingFails()
     {
-        // 上流 (RecordedManageModel.delete) はプロテクト中の録画を消させない。
+        // EPGStation (RecordedManageModel.delete) はプロテクト中の録画を消させない。
         var calls = new List<string>();
         var repository = new FakeRecordedItemRepository(isRecording: false, calls, isProtected: true);
         var stopService = new FakeRecordingStopService(calls);

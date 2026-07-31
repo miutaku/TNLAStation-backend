@@ -6,7 +6,7 @@ namespace TNLAStation.Infrastructure.Configuration.EpgStation;
 /// <summary>
 /// EPGStation の <c>config/config.yml</c> をそのまま読む。
 ///
-/// 対応する上流実装は <c>EPGStation/src/model/Configuration.ts</c> (v2.10.0,
+/// 対応する EPGStation 実装は <c>EPGStation/src/model/Configuration.ts</c> (v2.10.0,
 /// 5cf2ea383d37937eacecf424820dbd7a278d577e) の <c>readConfig</c> / <c>formatConfig</c> /
 /// <c>setTemplateValues</c> / <c>directoryFormatting</c>。既定値の表 (<c>DEFAULT_VALUE</c>) と
 /// 整形の順序まで写してあるので、同じ config.yml からは同じ結果が出る。
@@ -27,7 +27,7 @@ public static class EpgStationConfigLoader
     /// <c>%ROOT%</c> の展開先。EPGStation では インストール先 (<c>config/</c> の親) にあたる。
     /// </param>
     /// <param name="templatePath">
-    /// config.yml.template のパス。読めない場合、上流と同じく stream の既定値補完を行わない。
+    /// config.yml.template のパス。読めない場合、EPGStation と同じく stream の既定値補完を行わない。
     /// </param>
     public static EpgStationConfigFile Load(string configPath, string rootPath, string? templatePath = null)
     {
@@ -43,7 +43,7 @@ public static class EpgStationConfigLoader
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                // 上流も template が読めなければ警告だけで続行する。
+                // EPGStation も template が読めなければ警告だけで続行する。
                 template = null;
             }
         }
@@ -90,7 +90,7 @@ public static class EpgStationConfigLoader
         List<string> apiServers = StringList(config, "apiServers") ?? [];
         if (apiServers.Count == 0)
         {
-            // port 未設定 (https のみ) の場合、上流は文字列 "undefined" を埋め込む。同じ値を出す。
+            // port 未設定 (https のみ) の場合、EPGStation は文字列 "undefined" を埋め込む。同じ値を出す。
             apiServers.Add($"http://localhost:{(port.HasValue ? port.Value.ToString(CultureInfo.InvariantCulture) : "undefined")}");
         }
 
@@ -358,7 +358,7 @@ public static class EpgStationConfigLoader
     /// <summary>
     /// <c>setTemplateValues</c> の stream 部分。config.yml が <c>stream.live.ts</c> や
     /// <c>stream.recorded.ts</c> を持つのに、その下の形式を書いていないときだけ template で埋める。
-    /// template が読めなければ (上流の <c>templateConfig === null</c>) 何もしない。
+    /// template が読めなければ (EPGStation の <c>templateConfig === null</c>) 何もしない。
     /// </summary>
     private static EpgStationStreamConfig? ReadStream(YamlMappingNode? stream, YamlMappingNode? template)
     {
@@ -453,7 +453,7 @@ public static class EpgStationConfigLoader
 
     /// <summary>
     /// <c>Configuration.directoryFormatting</c>。<c>%ROOT%</c> を 1 度だけ置き換え、末尾の
-    /// パス区切り文字を 1 つ落とす。上流の <c>String.prototype.replace</c> は最初の 1 件だけを
+    /// パス区切り文字を 1 つ落とす。EPGStation の <c>String.prototype.replace</c> は最初の 1 件だけを
     /// 置き換えるので、こちらも 1 件だけにしてある。
     /// </summary>
     internal static string DirectoryFormatting(string directory, string rootPath)

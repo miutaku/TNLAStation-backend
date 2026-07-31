@@ -61,7 +61,7 @@ public sealed partial class ReserveGenerator(
             await store.ReplaceAsync(assignments, now, cancellationToken);
             await recordingSchedule.RequestAsync(cancellationToken);
 
-            // 上流は予約更新イベントで ipc.notifyClient() を呼ぶ (EventSetter の
+            // EPGStation は予約更新イベントで ipc.notifyClient() を呼ぶ (EventSetter の
             // reserveEvent.setUpdated)。画面の予約一覧が黙って古いままになるのを防ぐ。
             notifier.NotifyClient();
 

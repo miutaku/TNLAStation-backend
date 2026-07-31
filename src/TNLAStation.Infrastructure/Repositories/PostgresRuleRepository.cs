@@ -69,7 +69,7 @@ public sealed class PostgresRuleRepository(IDbContextFactory<EpgDbContext> conte
     }
 
     /// <summary>
-    /// 上流の enable/disable は存在チェックをしない (無ければ何も起きず 200 のまま) ので、
+    /// EPGStation の enable/disable は存在チェックをしない (無ければ何も起きず 200 のまま) ので、
     /// update と違って見つからなくても例外にしない。
     /// </summary>
     public async ValueTask SetEnabledAsync(long ruleId, bool isEnabled, CancellationToken cancellationToken)

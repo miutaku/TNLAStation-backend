@@ -11,7 +11,7 @@ namespace TNLAStation.Infrastructure.DependencyInjection;
 /// 1 秒間隔で待ち続ける。繋がらないまま先へ進む経路が無い。
 ///
 /// TNLAStation は契約試験を外部サービス無しで回すために、Mirakurun やデータベースが
-/// 無い構成では機能ごとに「何もしない実装」へ差し替えられるようにしてある。これは上流に
+/// 無い構成では機能ごとに「何もしない実装」へ差し替えられるようにしてある。これは EPGStation に
 /// 対応物が無い仕組みなので、既定で有効にしてはいけない。既定で有効だと、設定の書き漏らしが
 /// 起動失敗ではなく「一部の機能だけ静かに動かない」という形で現れ、原因に辿り着けない。
 ///
@@ -86,5 +86,5 @@ public static class StartupRequirements
     }
 }
 
-/// <summary>起動に要る設定が足りない。上流の fatal + exit(1) にあたる。</summary>
+/// <summary>起動に要る設定が足りない。EPGStation の fatal + exit(1) にあたる。</summary>
 public sealed class StartupRequirementException(string message) : Exception(message);

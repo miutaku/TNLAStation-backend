@@ -298,7 +298,7 @@ public sealed class RecordingStopTests
             Assert.Equal("H.265", queued.Mode);
             Assert.True(queued.RemoveOriginal);
             Assert.False(queued.IsRunning);
-            // 出力先の指定が無い予約は、上流の既定と同じく元ファイルの隣へ出す。
+            // 出力先の指定が無い予約は、EPGStation の既定と同じく元ファイルの隣へ出す。
             Assert.Null(queued.ParentDirectoryName);
             Assert.Null(queued.Directory);
         }

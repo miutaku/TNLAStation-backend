@@ -86,7 +86,7 @@ public sealed class InMemoryReserveRepository : IReserveRepository
 
         lock (gate)
         {
-            // 上流と同じ非対称な拒否: 番組指定の手動予約は、既に何か (手動でもルールでも) が
+            // EPGStation と同じ非対称な拒否: 番組指定の手動予約は、既に何か (手動でもルールでも) が
             // 同じ番組を掴んでいれば拒否する。逆にルール側からの二重取得は防がない。
             if (command.ProgramId is { } programId &&
                 reserves.Any(item => item.ProgramId == programId))

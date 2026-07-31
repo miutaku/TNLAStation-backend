@@ -9,7 +9,7 @@ namespace TNLAStation.Api.Endpoints;
 /// <summary>
 /// <c>GET /api/debug</c>。API 仕様書を読み込ませた Swagger UI へ送る。
 ///
-/// 上流は <c>EPGStation/src/model/service/ServiceServer.ts</c> の <c>setSwaggerUI</c>:
+/// EPGStation は <c>EPGStation/src/model/service/ServiceServer.ts</c> の <c>setSwaggerUI</c>:
 /// <code>res.redirect(this.createUrl('/api-docs/?url=' + this.createUrl('/api/docs')))</code>
 /// <c>createUrl</c> は subDirectory が無ければ引数そのまま、あれば <c>url-join</c> で結合する。
 /// url-join は <c>/?</c> を <c>?</c> へ潰すので、subDirectory の有無で <c>/api-docs/?url=</c> と

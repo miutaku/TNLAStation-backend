@@ -9,8 +9,8 @@ public sealed class EncodeOptions
 
     /// <summary>
     /// 同時に処理するエンコードの数 (EPGStation の <c>concurrentEncodeNum</c>)。既定値 0 は
-    /// 「エンコード機能を使わない」という意味で、上流と同じく <c>POST /api/encode</c> は
-    /// <c>CncurrentEncodeNumIsZero</c> (上流の綴りのまま) で 500 になる。
+    /// 「エンコード機能を使わない」という意味で、EPGStation と同じく <c>POST /api/encode</c> は
+    /// <c>CncurrentEncodeNumIsZero</c> (EPGStation の綴りのまま) で 500 になる。
     /// 根拠: EPGStation/src/model/service/encode/EncodeManageModel.ts の push()。
     /// </summary>
     public int ConcurrentEncodeNum { get; init; }

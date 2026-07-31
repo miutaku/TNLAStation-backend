@@ -16,7 +16,7 @@ public static class ReserveGenerationPolicy
     }
 
     /// <summary>
-    /// 録る候補を集める。上流はルール側で手動予約との重複を除外しない — 同じ番組を手動と
+    /// 録る候補を集める。EPGStation はルール側で手動予約との重複を除外しない — 同じ番組を手動と
     /// ルールの両方が掴むと、見た目には重複した予約が並ぶ (二重登録の拒否は追加時の
     /// <c>ReservationManageModelReservedError</c> 側だけの片方向)。同じ番組なら物理チャンネルも
     /// 同じなので、チューナーは相乗りになり本数を無駄には使わない。
@@ -216,7 +216,7 @@ public static class ReserveGenerationPolicy
             ? input.Now.AddDays(-days)
             : DateTimeOffset.MinValue;
 
-        // 上流は番組名だけでなく放送局も一致する場合だけ重複と見なす。同名の別チャンネル
+        // EPGStation は番組名だけでなく放送局も一致する場合だけ重複と見なす。同名の別チャンネル
         // 再放送 (同時ネットの別局など) まで重複扱いにすると、録るべきものを録り逃す。
         return input.History.Any(item =>
             string.Equals(item.Name, program.ShortName, StringComparison.Ordinal) &&
@@ -225,10 +225,10 @@ public static class ReserveGenerationPolicy
     }
 
     /// <summary>
-    /// 上流の Tuner.add と同じ判断: チューナーを番号の若い順に見て、対応種別かつ
+    /// EPGStation の Tuner.add と同じ判断: チューナーを番号の若い順に見て、対応種別かつ
     /// (今この時間帯に何も入っていない OR 既に入っている最優先の予約と同じ物理チャンネル)
     /// の最初の 1 本を使う。若い番号に空きがあれば、たとえ別の番号で相乗りできても
-    /// そちらへは回さない — 上流も相乗りを積極的に探しには行かず、素直に空きから使う。
+    /// そちらへは回さない — EPGStation も相乗りを積極的に探しには行かず、素直に空きから使う。
     /// </summary>
     private static int? FindTuner(
         ReserveTarget target,
@@ -271,8 +271,8 @@ public static class ReserveGenerationPolicy
     /// チューナーが足りないとき、どれを優先してチューナーへ割り当てるか。EPGStation の
     /// sortReserve と同じ基準で並べる:
     /// 1. 手動予約 (ruleId を持たない — 時刻指定を含む) は必ずルール予約より先。
-    /// 2. <see cref="ReserveTarget.Priority"/> は上流に無い TNLAStation 独自の項目。
-    ///    上流互換のクライアントは既定値 (Normal=0) のまま送ってくるので、両方 0 のときは
+    /// 2. <see cref="ReserveTarget.Priority"/> は EPGStation に無い TNLAStation 独自の項目。
+    ///    EPGStation 互換のクライアントは既定値 (Normal=0) のまま送ってくるので、両方 0 のときは
     ///    何も変えない — 明示的に差を付けたときだけ、この段階で効く。
     /// 3. 手動予約どうしは、時刻指定を先に、そのうえで古い方 (ManualReserveId が小さい方) を先に。
     ///    EPGStation は作成/更新時刻で比べるが、こちらは安定した Id で代える。

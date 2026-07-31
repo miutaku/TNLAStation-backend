@@ -1,7 +1,7 @@
 namespace TNLAStation.Application.Models;
 
 /// <summary>
-/// エンコードオプションの検査。上流の ReserveOptionChecker.checkEncodeOption はルールの
+/// エンコードオプションの検査。EPGStation の ReserveOptionChecker.checkEncodeOption はルールの
 /// 追加・更新 (<see cref="RuleValidationPolicy"/>) と手動予約の追加・編集の両方から同じ
 /// ロジックで呼ばれているので、ここに1本化する。
 /// </summary>

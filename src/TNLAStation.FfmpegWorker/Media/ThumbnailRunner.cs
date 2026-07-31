@@ -10,7 +10,7 @@ namespace TNLAStation.FfmpegWorker.Media;
 /// <summary>
 /// EPGStation の thumbnailPosition と同じく、常に指定秒数の位置から 1 枚切り出す。
 /// 動画の長さに応じて位置を調整するようなことはしない — 短い録画で失敗するのも含めて
-/// 上流と同じ挙動にする。
+/// EPGStation と同じ挙動にする。
 /// </summary>
 public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate gate)
 {

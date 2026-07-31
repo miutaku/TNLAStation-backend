@@ -73,7 +73,7 @@ public sealed class EpgStationConfigLoaderTests
     {
         EpgStationConfigFile config = Load("port: 8888\n");
 
-        // 上流の DEFAULT_VALUE には m2ts.ios の末尾に " が入っている。直すと値が変わるので写す。
+        // EPGStation の DEFAULT_VALUE には m2ts.ios の末尾に " が入っている。直すと値が変わるので写す。
         Assert.Equal(
             "vlc-x-callback://x-callback-url/stream?url=PROTOCOL%3A%2F%2FADDRESS\"",
             config.UrlScheme!.M2Ts!.Ios);
@@ -103,7 +103,7 @@ public sealed class EpgStationConfigLoaderTests
 
         Assert.Null(config.Port);
         Assert.Equal(8443, config.Https!.Port);
-        // port が無いので、上流は文字列化した undefined をそのまま埋め込む。
+        // port が無いので、EPGStation は文字列化した undefined をそのまま埋め込む。
         Assert.Equal(["http://localhost:undefined"], config.ApiServers);
     }
 
@@ -395,7 +395,7 @@ public sealed class EpgStationConfigLoaderTests
             KodiOptions kodi = configuration.GetSection("Kodi").Get<KodiOptions>()!;
             KodiHostOptions host = Assert.Single(kodi.Hosts);
             Assert.Equal("living", host.Name);
-            // 上流は url.resolve(host, '/jsonrpc')。host のパスは捨てられる。
+            // EPGStation は url.resolve(host, '/jsonrpc')。host のパスは捨てられる。
             Assert.Equal("http://192.168.1.10:8080/jsonrpc", host.Url);
             Assert.Equal("kodi", host.User);
         }

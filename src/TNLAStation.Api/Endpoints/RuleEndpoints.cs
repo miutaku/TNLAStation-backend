@@ -26,7 +26,7 @@ internal static class RuleEndpoints
             .Accepts<AddRuleRequest>("application/json")
             .Produces<AddedRuleResponse>(StatusCodes.Status201Created);
 
-        // 上流は POST /rules/keyword にもルール追加を割り当てている。意図した設計には
+        // EPGStation は POST /rules/keyword にもルール追加を割り当てている。意図した設計には
         // 見えないが、そこへ投げる利用側がいる以上、同じように受ける。
         rules.MapPost("/keyword", AddRuleAsync)
             .WithName("AddRuleByKeywordPath")
@@ -149,7 +149,7 @@ internal static class RuleEndpoints
     }
 
     /// <summary>
-    /// 上流 (ReserveOptionChecker.checkRuleOption) が追加・更新時にかけている検査。落ちたら
+    /// EPGStation (ReserveOptionChecker.checkRuleOption) が追加・更新時にかけている検査。落ちたら
     /// AddRuleError/UpdateRuleError を投げて汎用の 500 になる。
     /// </summary>
     private static void ValidateRule(RecordingRule rule, EncodeOptions encodeOptions, string errorMessage) =>

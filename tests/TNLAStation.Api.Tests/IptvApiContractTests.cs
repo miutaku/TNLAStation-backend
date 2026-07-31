@@ -6,7 +6,7 @@ namespace TNLAStation.Api.Tests;
 /// <summary>
 /// IPTV 向けの m3u8/xmltv 出力。EPGStation は serviceType でデータ放送等を除外し、
 /// ロゴが無いチャンネルには tvg-logo を付けず、番組が 1 つも無いチャンネルは xmltv の
-/// channel 要素ごと省く。これらを外すと Kodi 側の表示が上流と変わるので固定する。
+/// channel 要素ごと省く。これらを外すと Kodi 側の表示が EPGStation と変わるので固定する。
 /// </summary>
 public sealed class IptvApiContractTests : IDisposable
 {

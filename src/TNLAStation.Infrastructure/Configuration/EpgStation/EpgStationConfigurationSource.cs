@@ -31,7 +31,7 @@ public sealed class EpgStationConfigurationSource : IConfigurationSource
 public sealed class EpgStationConfigurationProvider : ConfigurationProvider, IDisposable
 {
     /// <summary>
-    /// Node の <c>fs.watchFile</c> の既定間隔 (5007ms) に合わせた見に行く間隔。上流も
+    /// Node の <c>fs.watchFile</c> の既定間隔 (5007ms) に合わせた見に行く間隔。EPGStation も
     /// inotify ではなく stat の定期取得で config.yml の変化を拾っている。
     /// </summary>
     internal static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(5007);
@@ -89,7 +89,7 @@ public sealed class EpgStationConfigurationProvider : ConfigurationProvider, IDi
     }
 
     /// <summary>
-    /// 更新時刻か大きさが変わっていたら読み直す。読み直しに失敗した場合は、上流と同じく
+    /// 更新時刻か大きさが変わっていたら読み直す。読み直しに失敗した場合は、EPGStation と同じく
     /// 直前に読めた設定のまま動き続ける (起動中のサーバーを設定の書き損じで止めない)。
     /// </summary>
     internal void PollForChanges()

@@ -9,7 +9,7 @@ namespace TNLAStation.Api.Middleware;
 /// <summary>
 /// EPGStation v2.10.0 の OpenAPI schema に従って JSON body の必須プロパティを検証する。
 /// System.Text.Json は欠落した非 nullable 値も既定値で構築できるため、これを挟まないと
-/// 上流が 400 にする入力が変更処理まで到達してしまう。
+/// EPGStation が 400 にする入力が変更処理まで到達してしまう。
 /// </summary>
 public sealed class OpenApiRequestValidationMiddleware(RequestDelegate next)
 {

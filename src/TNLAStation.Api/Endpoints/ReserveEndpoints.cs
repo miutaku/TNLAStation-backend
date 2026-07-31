@@ -100,7 +100,7 @@ internal static class ReserveEndpoints
 
     /// <summary>
     /// 予約を消す。手動予約は消えるが、ルールが作った予約は消してもすぐ作り直されるので、
-    /// 代わりに除外へ倒す。これは上流と同じ振る舞いで、画面の「削除」は両方を兼ねている。
+    /// 代わりに除外へ倒す。これは EPGStation と同じ振る舞いで、画面の「削除」は両方を兼ねている。
     /// </summary>
     private static async Task<IResult> DeleteReserveAsync(
         long reserveId,
@@ -113,7 +113,7 @@ internal static class ReserveEndpoints
         Reservation? reserve = await repository.GetAsync(reserveId, cancellationToken);
         if (reserve is null)
         {
-            // 上流 (cancel) はここで存在チェックをしており、無ければ ReservationIsNotFound を
+            // EPGStation (cancel) はここで存在チェックをしており、無ければ ReservationIsNotFound を
             // 投げて 500 になる。空振りを 200 で許すのは skip/overlap 解除の側だけ。
             throw new InvalidOperationException("ReservationIsNotFound");
         }
@@ -140,7 +140,7 @@ internal static class ReserveEndpoints
             throw new InvalidOperationException("ReservationIsNotFound");
         }
 
-        // ルール予約以外・そもそも除外されていない予約には何もしない (上流と同じ)。
+        // ルール予約以外・そもそも除外されていない予約には何もしない (EPGStation と同じ)。
         if (reserve.RuleId is not null && reserve.IsSkip)
         {
             await repository.SetSkipAsync(reserveId, isSkip: false, cancellationToken);
@@ -164,7 +164,7 @@ internal static class ReserveEndpoints
             throw new InvalidOperationException("ReservationIsNotFound");
         }
 
-        // ルール予約以外・そもそも重複していない予約には何もしない (上流と同じ)。
+        // ルール予約以外・そもそも重複していない予約には何もしない (EPGStation と同じ)。
         if (reserve.RuleId is not null && reserve.IsOverlap)
         {
             await repository.ClearOverlapAsync(reserveId, cancellationToken);
@@ -189,14 +189,14 @@ internal static class ReserveEndpoints
         Reservation? existing = await repository.GetAsync(reserveId, cancellationToken);
         if (existing is null)
         {
-            // 上流 (edit) はここで存在チェックをしており、無ければ ReservationIsNotFound を
+            // EPGStation (edit) はここで存在チェックをしており、無ければ ReservationIsNotFound を
             // 投げて 500 になる。
             throw new InvalidOperationException("ReservationIsNotFound");
         }
 
         CreateReserveCommand command = request.ToCommand();
 
-        // 上流 (checkManualReserveOption) はここでもエンコードオプションを検査しており、
+        // EPGStation (checkManualReserveOption) はここでもエンコードオプションを検査しており、
         // 落ちると ReservationEditError が汎用の 500 として返る。
         if (!EncodeOptionValidationPolicy.IsValid(
             command.Encode, [.. encodeOptions.Value.Modes.Select(mode => mode.Name)], encodeOptions.Value.Modes.Count > 0))
@@ -215,7 +215,7 @@ internal static class ReserveEndpoints
                 await ReserveHookPayloads.BuildAsync(updated, epg, cancellationToken));
         }
 
-        // 上流はここだけ 200 ではなく 201 + { code, message } で答える。
+        // EPGStation はここだけ 200 ではなく 201 + { code, message } で答える。
         return Results.Json(
             new ResultMessageResponse(StatusCodes.Status201Created, "ok"),
             statusCode: StatusCodes.Status201Created);

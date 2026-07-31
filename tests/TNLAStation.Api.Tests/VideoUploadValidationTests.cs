@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace TNLAStation.Api.Tests;
 
 /// <summary>
-/// 上流 (videos/upload の post) はファイルが無いと FileIsNotFound、紐づけ先の録画が無い
+/// EPGStation (videos/upload の post) はファイルが無いと FileIsNotFound、紐づけ先の録画が無い
 /// (recordedId が数値ですらない場合を含む) と RecordedIdIsNull を投げ、どちらも汎用の 500 に
 /// なる。専用の 400/404 は無い。既定のテスト用ホストは Postgres 抜きで
 /// <c>EmptyVideoFileRepository</c> (常に null を返す) を使うので、DI を差し替えずに検証できる。

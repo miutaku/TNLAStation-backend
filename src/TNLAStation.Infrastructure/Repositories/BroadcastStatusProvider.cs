@@ -7,7 +7,7 @@ namespace TNLAStation.Infrastructure.Repositories;
 /// <summary>
 /// Mirakurun のチューナー一覧から放送波の有無を作る。
 ///
-/// 上流 (<c>EPGStation/src/index.ts</c> の <c>runOperator</c>) は起動時に 1 度だけ
+/// EPGStation (<c>EPGStation/src/index.ts</c> の <c>runOperator</c>) は起動時に 1 度だけ
 /// <c>client.getTuners()</c> を読み、<c>ReservationManageModel.setTuners</c> が
 /// <c>types</c> を種別ごとに OR して保持する。チューナーの故障や使用中は見ない。
 /// ここも同じく「1 度取れたらその結果を持ち続ける」形にしてある — 起動時に Mirakurun が

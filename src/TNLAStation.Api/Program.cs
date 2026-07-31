@@ -25,7 +25,7 @@ string? epgStationConfigPath = ResolveEpgStationConfigPath(builder.Configuration
 if (epgStationConfigPath is not null)
 {
     // 場所を明示された config.yml が無いのは設定の誤りなので、黙って既定値へ落とさず止める
-    // (上流の Configuration.readConfig も fatal を出して exit(1) する)。
+    // (EPGStation の Configuration.readConfig も fatal を出して exit(1) する)。
     builder.Configuration.AddEpgStationConfigFile(epgStationConfigPath, optional: false);
     // コンテナの内部待受ポートなど、デプロイ環境固有の値は config.yml より環境変数を
     // 優先できるようにする。通常の単体起動では環境変数が無ければ config.yml がそのまま有効。
@@ -132,7 +132,7 @@ if (!string.IsNullOrWhiteSpace(api.SubDirectory))
 
     // subDirectory を設定した EPGStation は、その配下にしか何も生やさない
     // (ServiceServer.createUrl を通したパスだけを app.use / app.get する)。
-    // UsePathBase だけだと接頭辞の有無どちらでも同じ経路に入ってしまい、上流が 404 を返す
+    // UsePathBase だけだと接頭辞の有無どちらでも同じ経路に入ってしまい、EPGStation が 404 を返す
     // URL が 200 になる。プレフィックスの外側は明示的に落とす。
     string prefix = api.SubDirectory;
     app.Use(async (context, next) =>

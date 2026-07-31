@@ -61,7 +61,7 @@ internal static class ThumbnailEndpoints
         IThumbnailService thumbnails,
         CancellationToken cancellationToken)
     {
-        // 上流は存在チェックをせず、常に 200 を返す。
+        // EPGStation は存在チェックをせず、常に 200 を返す。
         await thumbnails.CreateForVideoFileAsync(videoFileId, cancellationToken);
         return Results.Ok(new ResultCodeResponse(StatusCodes.Status200OK));
     }
@@ -87,7 +87,7 @@ internal static class ThumbnailEndpoints
         IThumbnailService thumbnails,
         CancellationToken cancellationToken)
     {
-        // 上流 (ThumbnailManageModel.delete) はここで存在チェックをしており、無ければ
+        // EPGStation (ThumbnailManageModel.delete) はここで存在チェックをしており、無ければ
         // ThumbnailIsNotFound を投げて 500 になる。
         ThumbnailFile? existing = await thumbnails.GetAsync(thumbnailId, cancellationToken);
         if (existing is null)

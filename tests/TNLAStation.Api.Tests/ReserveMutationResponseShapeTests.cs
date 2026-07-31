@@ -29,7 +29,7 @@ public sealed class ReserveMutationResponseShapeTests : IDisposable
         using HttpResponseMessage response = await client.DeleteAsync($"/api/reserves/{reserveId}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // 上流 (cancel) は消えた後にもう一度消そうとすると ReservationIsNotFound で 500 になる。
+        // EPGStation (cancel) は消えた後にもう一度消そうとすると ReservationIsNotFound で 500 になる。
         using HttpResponseMessage again = await client.DeleteAsync($"/api/reserves/{reserveId}");
         Assert.Equal(HttpStatusCode.InternalServerError, again.StatusCode);
 
@@ -52,7 +52,7 @@ public sealed class ReserveMutationResponseShapeTests : IDisposable
     [Fact]
     public async Task CancellingSkipAndOverlapOnAManualReserveNoOpButStillAnswer200()
     {
-        // 手動予約はそもそもルール予約ではないので、上流はここで何もせず 200 を返す。
+        // 手動予約はそもそもルール予約ではないので、EPGStation はここで何もせず 200 を返す。
         long reserveId = await AddManualReserveAsync("手動予約はskip対象外");
 
         using HttpResponseMessage skip = await client.DeleteAsync($"/api/reserves/{reserveId}/skip");

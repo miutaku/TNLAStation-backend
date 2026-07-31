@@ -2,7 +2,7 @@ namespace TNLAStation.Infrastructure.Configuration.EpgStation;
 
 /// <summary>
 /// EPGStation v2.10.0 の <c>src/model/IConfigFile.ts</c> をそのまま写した形。名前・階層・省略可否まで
-/// 上流に合わせてある。<c>null</c> は「その項目が config.yml に書かれておらず既定値も無い」という
+/// EPGStation に合わせてある。<c>null</c> は「その項目が config.yml に書かれておらず既定値も無い」という
 /// TypeScript の <c>undefined</c> に対応する。
 /// </summary>
 public sealed class EpgStationConfigFile
@@ -116,7 +116,7 @@ public sealed class EpgStationConfigFile
 
     /// <summary>
     /// EPGStation の既定値は 3 つとも必ず入る。config.yml が一部だけ書いた場合は書いた分だけになり、
-    /// <c>/api/config</c> は上流でも例外 (500) になる。その挙動ごと再現するため null を許す。
+    /// <c>/api/config</c> は EPGStation でも例外 (500) になる。その挙動ごと再現するため null を許す。
     /// </summary>
     public EpgStationUrlSchemeConfig? UrlScheme { get; init; }
 

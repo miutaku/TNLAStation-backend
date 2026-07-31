@@ -308,7 +308,7 @@ internal sealed partial class RecordingSession(
     }
 
     /// <summary>
-    /// 確定後に積む — 先に積むと worker が書き込み途中を掴む。位置は上流 setFinishRecording と同じ。
+    /// 確定後に積む — 先に積むと worker が書き込み途中を掴む。位置は EPGStation setFinishRecording と同じ。
     /// </summary>
     private async Task EnqueueEncodesAsync()
     {

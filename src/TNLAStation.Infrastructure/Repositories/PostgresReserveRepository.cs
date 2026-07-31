@@ -94,7 +94,7 @@ public sealed class PostgresReserveRepository(
 
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // 上流は番組指定の手動予約を、ルール予約であっても既に何かが同じ番組を掴んでいれば
+        // EPGStation は番組指定の手動予約を、ルール予約であっても既に何かが同じ番組を掴んでいれば
         // 拒否する (二重登録の入口を防ぐだけで、ルール側からの二重取得までは防いでいない非対称な仕様)。
         if (command.ProgramId is { } programId &&
             await context.Reserves.AnyAsync(item => item.ProgramId == programId, cancellationToken))

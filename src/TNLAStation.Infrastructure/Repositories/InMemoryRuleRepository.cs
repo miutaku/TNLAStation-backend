@@ -75,7 +75,7 @@ public sealed class InMemoryRuleRepository : IRuleRepository
     }
 
     /// <summary>
-    /// 上流の enable/disable は存在チェックをしない (無ければ何も起きず 200 のまま) ので、
+    /// EPGStation の enable/disable は存在チェックをしない (無ければ何も起きず 200 のまま) ので、
     /// ここも見つからなければ静かに無視する。
     /// </summary>
     public ValueTask SetEnabledAsync(long ruleId, bool isEnabled, CancellationToken cancellationToken)

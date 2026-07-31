@@ -41,12 +41,12 @@ public sealed class CollectionApiContractTests : IDisposable
     [Fact]
     public async Task RecordingHasNoDeleteRouteAndStoppingGoesThroughDeleteRecorded()
     {
-        // 上流に DELETE /api/recording/{id} は無い。録画中の停止は DELETE /api/recorded/{id} が
+        // EPGStation に DELETE /api/recording/{id} は無い。録画中の停止は DELETE /api/recorded/{id} が
         // 兼ねる (EventSetter.setDeleteRecorded が予約を取り消す)。
         using HttpResponseMessage removed = await client.DeleteAsync("/api/recording/999");
         Assert.Equal(HttpStatusCode.NotFound, removed.StatusCode);
 
-        // 存在しない録画の削除は 404 ではなく、上流と同じ errors 付きの 500。
+        // 存在しない録画の削除は 404 ではなく、EPGStation と同じ errors 付きの 500。
         using HttpResponseMessage response = await client.DeleteAsync("/api/recorded/999");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         using JsonDocument document = await ReadJsonAsync(response);

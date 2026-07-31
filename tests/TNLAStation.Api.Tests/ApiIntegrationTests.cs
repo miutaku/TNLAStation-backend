@@ -18,7 +18,7 @@ public sealed class ApiIntegrationTests : IDisposable
     public ApiIntegrationTests()
     {
         // ReservePostReturns201AndPreservesMapperCompatibilityTypos が使う mode1/mode3 は、
-        // 上流の checkEncodeOption と同じく config に無い名前だと弾かれるので用意しておく。
+        // EPGStation の checkEncodeOption と同じく config に無い名前だと弾かれるので用意しておく。
         factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
             [
@@ -86,7 +86,7 @@ public sealed class ApiIntegrationTests : IDisposable
             },
             encodeOption = new
             {
-                // directory2 は意図的に送らない — 上流の checkEncodeOption は mode を伴わない
+                // directory2 は意図的に送らない — EPGStation の checkEncodeOption は mode を伴わない
                 // directory を拒む (AddReservationOptionError) ので、mode2 抜きでは送れない。
                 mode1 = "H.264",
                 mode3 = "H.265",

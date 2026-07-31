@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace TNLAStation.Api.SocketIo;
 
 /// <summary>
-/// Engine.IO v4 / Socket.IO v5 のパケット表現。socket.io 4.7.5 (上流が使っている版) の
+/// Engine.IO v4 / Socket.IO v5 のパケット表現。socket.io 4.7.5 (EPGStation が使っている版) の
 /// クライアントがそのまま繋がる形にしてある。
 ///
 /// Engine.IO の種別: 0=open 1=close 2=ping 3=pong 4=message 5=upgrade 6=noop。
@@ -15,7 +15,7 @@ internal static class EngineIoProtocol
 {
     public const char PayloadSeparator = '';
 
-    /// <summary>上流 (socket.io の既定値) と同じ。クライアントはこの値で ping を待つ。</summary>
+    /// <summary>EPGStation (socket.io の既定値) と同じ。クライアントはこの値で ping を待つ。</summary>
     public const int PingIntervalMs = 25_000;
 
     public const int PingTimeoutMs = 20_000;
@@ -50,7 +50,7 @@ internal static class EngineIoProtocol
     /// <summary>名前空間 "/" への接続確認。socket.io v5 は CONNECT の応答に socket の id を返す。</summary>
     public static string Connect(string socketId) => "40{\"sid\":\"" + socketId + "\"}";
 
-    /// <summary>payload を持たないイベント。上流の <c>io.sockets.emit('updateStatus')</c> と同じ形。</summary>
+    /// <summary>payload を持たないイベント。EPGStation の <c>io.sockets.emit('updateStatus')</c> と同じ形。</summary>
     public static string Event(string name) => "42" + JsonSerializer.Serialize(new[] { name });
 
     public static string EncodePayload(IReadOnlyList<string> packets) =>

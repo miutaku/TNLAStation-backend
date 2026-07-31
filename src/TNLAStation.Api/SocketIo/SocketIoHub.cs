@@ -6,7 +6,7 @@ namespace TNLAStation.Api.SocketIo;
 /// <summary>
 /// クライアントへ状態変更を知らせる。
 ///
-/// 上流は <c>EPGStation/src/model/service/socketio/SocketIOManageModel.ts</c>。公開されている
+/// EPGStation は <c>EPGStation/src/model/service/socketio/SocketIOManageModel.ts</c>。公開されている
 /// イベントは 2 つだけで、どちらも payload を持たない:
 /// <c>updateStatus</c> (<c>notifyClient</c>) と <c>updateEncode</c>
 /// (<c>notifyUpdateEncodeProgress</c>)。どちらも 200ms の遅延で束ねられ、その間に何度呼ばれても
@@ -14,7 +14,7 @@ namespace TNLAStation.Api.SocketIo;
 /// </summary>
 public sealed class SocketIoHub : IDisposable
 {
-    /// <summary>上流の <c>setTimeout(..., 200)</c> と同じ間引き幅。</summary>
+    /// <summary>EPGStation の <c>setTimeout(..., 200)</c> と同じ間引き幅。</summary>
     internal static readonly TimeSpan NotifyDelay = TimeSpan.FromMilliseconds(200);
 
     private readonly ConcurrentDictionary<string, SocketIoSession> sessions = new(StringComparer.Ordinal);
@@ -52,11 +52,11 @@ public sealed class SocketIoHub : IDisposable
         }
     }
 
-    /// <summary>上流の <c>notifyClient</c>。200ms 後に <c>updateStatus</c> を 1 回だけ流す。</summary>
+    /// <summary>EPGStation の <c>notifyClient</c>。200ms 後に <c>updateStatus</c> を 1 回だけ流す。</summary>
     public void NotifyClient() => Schedule(ref statusTimer, "updateStatus");
 
     /// <summary>
-    /// 上流の <c>notifyUpdateEncodeProgress</c>。<c>updateStatus</c> とは別枠で間引かれるので、
+    /// EPGStation の <c>notifyUpdateEncodeProgress</c>。<c>updateStatus</c> とは別枠で間引かれるので、
     /// 同じ 200ms の窓に両方が入っても 2 本とも飛ぶ。
     /// </summary>
     public void NotifyUpdateEncodeProgress() => Schedule(ref encodeTimer, "updateEncode");
