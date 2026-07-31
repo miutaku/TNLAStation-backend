@@ -28,3 +28,30 @@ public sealed class ShellCommandLineTests
         Assert.Equal(["ffmpeg", "-i", "/recorded/a b.m2ts"], ShellCommandLine.Split("ffmpeg -i '/recorded/a b.m2ts'"));
     }
 }
+
+public sealed class ThumbnailCommandTests
+{
+    private const string Default =
+        "%FFMPEG% -ss %THUMBNAIL_POSITION% -y -i %INPUT% -vframes 1 -f image2 -s %THUMBNAIL_SIZE% %OUTPUT%";
+
+    /// <summary>
+    /// 既定の thumbnailCmd は %INPUT% を引用符で囲まない。先に置換すると、空白を含む
+    /// 番組名のパスがそこで別の引数へ割れ、ffmpeg が入力を開けずに落ちる。
+    /// </summary>
+    [Fact]
+    public void APathWithSpacesStaysASingleArgument()
+    {
+        string[] parts = TNLAStation.FfmpegWorker.Media.ThumbnailRunner.BuildCommand(
+            Default,
+            "/usr/bin/ffmpeg",
+            "/recorded/シリアナ [字]-2026年07月31日.m2ts",
+            "/thumbnails/41.jpg",
+            10,
+            "480x270");
+
+        Assert.Equal("/usr/bin/ffmpeg", parts[0]);
+        Assert.Contains("/recorded/シリアナ [字]-2026年07月31日.m2ts", parts);
+        Assert.Contains("/thumbnails/41.jpg", parts);
+        Assert.Equal(["-ss", "10", "-y", "-i"], parts[1..5]);
+    }
+}

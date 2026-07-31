@@ -59,7 +59,7 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
         else
         {
             string thumbnailSize = $"{width.ToString(CultureInfo.InvariantCulture)}x{heightToken}";
-            string[] parts = ShellCommandLine.Split(Substitute(command, input, output, positionSeconds, thumbnailSize));
+            string[] parts = BuildCommand(command, options.FfmpegPath, input, output, positionSeconds, thumbnailSize);
             if (parts.Length == 0)
             {
                 return (false, "the configured thumbnail command is empty");
@@ -115,10 +115,17 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
             : (false, error.Length > 0 ? error : $"ffmpeg wrote nothing to {output}");
     }
 
-    private string Substitute(string command, string input, string output, double positionSeconds, string thumbnailSize) => command
-        .Replace("%FFMPEG%", options.FfmpegPath, StringComparison.Ordinal)
-        .Replace("%INPUT%", input, StringComparison.Ordinal)
-        .Replace("%OUTPUT%", output, StringComparison.Ordinal)
-        .Replace("%THUMBNAIL_POSITION%", positionSeconds.ToString("0.###", CultureInfo.InvariantCulture), StringComparison.Ordinal)
-        .Replace("%THUMBNAIL_SIZE%", thumbnailSize, StringComparison.Ordinal);
+    /// <summary>
+    /// 分割してから置換する。先に置換すると、空白を含むファイル名がそこで別の引数へ割れる。
+    /// EPGStation (ThumbnailManageModel) も parseCmdStr の後に引数ごとへ差し込んでいる。
+    /// </summary>
+    internal static string[] BuildCommand(string command, string ffmpegPath, string input, string output, double positionSeconds, string thumbnailSize) =>
+    [
+        .. ShellCommandLine.Split(command).Select(part => part
+            .Replace("%FFMPEG%", ffmpegPath, StringComparison.Ordinal)
+            .Replace("%INPUT%", input, StringComparison.Ordinal)
+            .Replace("%OUTPUT%", output, StringComparison.Ordinal)
+            .Replace("%THUMBNAIL_POSITION%", positionSeconds.ToString("0.###", CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("%THUMBNAIL_SIZE%", thumbnailSize, StringComparison.Ordinal)),
+    ];
 }
