@@ -72,6 +72,49 @@ public sealed class IptvApiContractTests : IDisposable
         Assert.Contains("モック放送中番組", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// EPGStation は channel の直後にその局の programme を並べる。取り込む側の実装差が
+    /// 出ないよう、並びまで写す。
+    /// </summary>
+    [Fact]
+    public async Task EachChannelIsFollowedByItsOwnProgrammes()
+    {
+        string body = await (await client.GetAsync("/api/iptv/epg.xml")).Content.ReadAsStringAsync();
+
+        int channel = body.IndexOf("<channel id=\"3273601024\"", StringComparison.Ordinal);
+        int programme = body.IndexOf("<programme ", StringComparison.Ordinal);
+
+        Assert.True(channel >= 0 && programme > channel);
+        Assert.Contains("</channel>\n<programme ", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// EPGStation は禁止文字を全角へ置き換え、実体参照を一切出さない。解けない取り込み側が
+    /// あるため、その出力へ揃える。
+    /// </summary>
+    [Fact]
+    public async Task TheEpgCarriesNoXmlEntities()
+    {
+        string body = await (await client.GetAsync("/api/iptv/epg.xml")).Content.ReadAsStringAsync();
+
+        foreach (string entity in new[] { "&amp;", "&lt;", "&gt;", "&quot;", "&apos;" })
+        {
+            Assert.DoesNotContain(entity, body, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// 同名の放送局は取り込む側が同じものと見なす。EPGStation は半角空白を足して別物にする。
+    /// 末尾の全角空白も EPGStation がそのまま出しているもの。
+    /// </summary>
+    [Fact]
+    public async Task ChannelNamesKeepTheTrailingWideSpace()
+    {
+        string body = await (await client.GetAsync("/api/iptv/channel.m3u8?mode=0")).Content.ReadAsStringAsync();
+
+        Assert.Contains("ＮＨＫ総合１・東京\u3000\n", body, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         client.Dispose();

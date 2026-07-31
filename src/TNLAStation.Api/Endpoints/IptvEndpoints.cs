@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Xml;
 using Microsoft.AspNetCore.Mvc;
 using TNLAStation.Api.Contracts;
 using TNLAStation.Application.Abstractions;
@@ -50,6 +49,9 @@ internal static class IptvEndpoints
         IReadOnlyList<EpgChannel> channels = await repository.ListChannelsAsync(cancellationToken);
         string origin = Origin(context);
         var builder = new StringBuilder("#EXTM3U\n");
+        // 同名の放送局は取り込む側が同じものと見なす。EPGStation は 2 つめ以降へ半角空白を
+        // 足して別物にしている。
+        var seenNames = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (EpgChannel channel in channels)
         {
@@ -60,11 +62,22 @@ internal static class IptvEndpoints
 
             string id = channel.Id.ToString(CultureInfo.InvariantCulture);
             string name = isHalfWidth ? channel.HalfWidthName : channel.Name;
-            string logo = channel.HasLogoData ? $"tvg-logo=\"{origin}/api/channels/{id}/logo\" " : string.Empty;
+            if (seenNames.TryGetValue(name, out int seen))
+            {
+                seenNames[name] = seen + 1;
+                name += new string(' ', seen + 2);
+            }
+            else
+            {
+                seenNames[name] = 0;
+            }
+
+            string logo = channel.HasLogoData ? $"tvg-logo=\"{origin}/api/channels/{id}/logo\"" : string.Empty;
             builder.Append("#KODIPROP:mimetype=video/mp2t\n");
-            builder.Append(CultureInfo.InvariantCulture, $"#EXTINF:-1 tvg-id=\"{id}\" ");
-            builder.Append(logo);
-            builder.Append(CultureInfo.InvariantCulture, $"group-title=\"{channel.ChannelType}\",{name}\n");
+            builder.Append(CultureInfo.InvariantCulture, $"#EXTINF:-1 tvg-id=\"{id}\" {logo} ");
+            // 末尾の全角空白は EPGStation がそのまま出しているもの。取り込む側は名前で
+            // 突き合わせることがあり、有無が食い違うと別の放送局として扱われる。
+            builder.Append(CultureInfo.InvariantCulture, $"group-title=\"{channel.ChannelType}\",{name}\u3000\n");
             builder.Append(CultureInfo.InvariantCulture,
                 $"{origin}/api/streams/live/{id}/m2ts?mode={mode.ToString(CultureInfo.InvariantCulture)}\n");
         }
@@ -88,87 +101,70 @@ internal static class IptvEndpoints
         HashSet<long> channelIdsWithPrograms = [.. programs.Select(program => program.ChannelId)];
         channels = [.. channels.Where(channel => channelIdsWithPrograms.Contains(channel.Id))];
 
-        var settings = new XmlWriterSettings
-        {
-            Async = true,
-            Encoding = new UTF8Encoding(false),
-            Indent = false,
-            OmitXmlDeclaration = true,
-        };
-        // StringWriter へ書くと、宣言が utf-16 になる。宣言を信じて読む取り込み側が
-        // 文字化けするので、最初から UTF-8 の byte 列として組み立てる。
-        var output = new MemoryStream();
-        await output.WriteAsync("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"u8.ToArray(), cancellationToken);
-        await using (XmlWriter writer = XmlWriter.Create(output, settings))
-        {
-            await writer.WriteDocTypeAsync("tv", null, "xmltv.dtd", null);
-            await writer.WriteStartElementAsync(null, "tv", null);
-            await writer.WriteAttributeStringAsync(null, "generator-info-name", null, "EPGStation");
+        // EPGStation は XmlWriter を使わず文字列を組み立て、禁止文字を全角へ置き換えて
+        // 実体参照を一切出さない。取り込む側の実装差が出ないよう、その出力へ揃える。
+        var programsByChannel = programs
+            .GroupBy(program => program.ChannelId)
+            .ToDictionary(group => group.Key, group => group.ToArray());
 
-            foreach (EpgChannel channel in channels)
+        var builder = new StringBuilder(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+            "<!DOCTYPE tv SYSTEM \"xmltv.dtd\">" +
+            "<tv generator-info-name=\"EPGStation\">");
+
+        foreach (EpgChannel channel in channels)
+        {
+            if (!programsByChannel.TryGetValue(channel.Id, out EpgProgram[]? channelPrograms))
             {
-                await writer.WriteStartElementAsync(null, "channel", null);
-                await writer.WriteAttributeStringAsync(
-                    null,
-                    "id",
-                    null,
-                    channel.Id.ToString(CultureInfo.InvariantCulture));
-                await writer.WriteAttributeStringAsync(null, "tp", null, channel.Channel);
-                await WriteTextElementAsync(writer, "display-name", isHalfWidth ? channel.HalfWidthName : channel.Name);
-                await WriteTextElementAsync(
-                    writer,
-                    "service_id",
-                    channel.ServiceId.ToString(CultureInfo.InvariantCulture),
-                    withLanguage: false);
-                await writer.WriteEndElementAsync();
+                continue;
             }
 
-            foreach (EpgProgram program in programs)
+            builder.Append(CultureInfo.InvariantCulture,
+                $"<channel id=\"{channel.Id.ToString(CultureInfo.InvariantCulture)}\" tp=\"{channel.Channel}\">");
+            builder.Append(CultureInfo.InvariantCulture,
+                $"<display-name lang=\"ja_JP\">{(isHalfWidth ? channel.HalfWidthName : channel.Name)}</display-name>");
+            builder.Append(CultureInfo.InvariantCulture,
+                $"<service_id>{channel.ServiceId.ToString(CultureInfo.InvariantCulture)}</service_id>");
+            builder.Append("</channel>\n");
+
+            foreach (EpgProgram program in channelPrograms)
             {
-                await writer.WriteStartElementAsync(null, "programme", null);
-                await writer.WriteAttributeStringAsync(null, "start", null, FormatTime(program.StartAt));
-                await writer.WriteAttributeStringAsync(null, "stop", null, FormatTime(program.EndAt));
-                await writer.WriteAttributeStringAsync(
-                    null,
-                    "channel",
-                    null,
-                    program.ChannelId.ToString(CultureInfo.InvariantCulture));
-                await WriteTextElementAsync(writer, "title", isHalfWidth ? program.HalfWidthName : program.Name);
+                builder.Append(CultureInfo.InvariantCulture,
+                    $"<programme start=\"{FormatTime(program.StartAt)}\" stop=\"{FormatTime(program.EndAt)}\" channel=\"{program.ChannelId.ToString(CultureInfo.InvariantCulture)}\">");
+                builder.Append(CultureInfo.InvariantCulture,
+                    $"<title lang=\"ja_JP\">{Sanitise(isHalfWidth ? program.HalfWidthName : program.Name)}</title>");
 
                 string? description = isHalfWidth ? program.HalfWidthDescription : program.Description;
-                string? extended = isHalfWidth ? program.HalfWidthExtended : program.Extended;
-                string combinedDescription = $"{description}{extended}";
-                if (!string.IsNullOrWhiteSpace(combinedDescription))
+                if (description is not null)
                 {
-                    await WriteTextElementAsync(writer, "desc", combinedDescription);
+                    string? extended = isHalfWidth ? program.HalfWidthExtended : program.Extended;
+                    builder.Append(CultureInfo.InvariantCulture,
+                        $"    <desc lang=\"ja_JP\">{Sanitise(description)}{Sanitise(extended)}</desc>");
                 }
 
-                await writer.WriteEndElementAsync();
+                builder.Append("</programme>");
             }
-
-            await writer.WriteEndElementAsync();
-            await writer.FlushAsync();
         }
 
-        return Results.File(output.ToArray(), "application/xml; charset=utf-8");
+        builder.Append("</tv>");
+
+        return Results.File(new UTF8Encoding(false).GetBytes(builder.ToString()), "application/xml; charset=\"UTF-8\"");
     }
 
-    private static async Task WriteTextElementAsync(
-        XmlWriter writer,
-        string name,
-        string value,
-        bool withLanguage = true)
-    {
-        await writer.WriteStartElementAsync(null, name, null);
-        if (withLanguage)
-        {
-            // 取り込む側は言語で表示を選ぶ。付けないと選べない。
-            await writer.WriteAttributeStringAsync(null, "lang", null, "ja_JP");
-        }
+    /// <summary>
+    /// EPGStation の replaceStr。実体参照を出さずに済むよう、XML で使えない文字を全角へ
+    /// 置き換える。取り込む側に実体参照を解けないものがあり、EPGStation はそれを避けている。
+    /// </summary>
+    private static string Sanitise(string? value) => value is null
+        ? string.Empty
+        : value
+            .Replace("<", "＜", StringComparison.Ordinal)
+            .Replace(">", "＞", StringComparison.Ordinal)
+            .Replace("&", "＆", StringComparison.Ordinal)
+            .Replace("\"", "”", StringComparison.Ordinal)
+            .Replace("'", "’", StringComparison.Ordinal)
+            .Replace("\u001a", string.Empty, StringComparison.Ordinal);
 
-        await writer.WriteStringAsync(value);
-        await writer.WriteEndElementAsync();
-    }
 
     /// <summary>
     /// XMLTV の時刻。取り込む側は現地時刻とずれ幅の組で読むので、UTC のままでは
