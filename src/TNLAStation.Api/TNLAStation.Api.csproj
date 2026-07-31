@@ -12,4 +12,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Compatibility\epgstation-api-v2.10.0.json" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TNLAStation.Api.Tests" />
+  </ItemGroup>
+
 </Project>

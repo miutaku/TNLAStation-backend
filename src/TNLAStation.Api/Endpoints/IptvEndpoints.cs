@@ -37,6 +37,11 @@ internal static class IptvEndpoints
     /// </summary>
     private static readonly HashSet<int> MediaServiceTypes = [0x01, 0x02, 0xa1, 0xa2, 0xa5, 0xa6, 0xad];
 
+    /// <summary>一覧へ載せる対象。映像サービスのうち、TV で見る意味のないものを除く。</summary>
+    private static bool IsListedService(EpgChannel channel) =>
+        (channel.ServiceType is not { } serviceType || MediaServiceTypes.Contains(serviceType)) &&
+        !IptvChannelNumbers.IsHandheldService(channel);
+
     private static async Task<IResult> GetChannelListAsync(
         HttpContext context,
         IEpgRepository repository,
@@ -46,19 +51,16 @@ internal static class IptvEndpoints
     {
         bool halfWidthNames = isHalfWidth ?? ChannelNameDefaultsToHalfWidth;
         IReadOnlyList<EpgChannel> channels = await repository.ListChannelsAsync(cancellationToken);
+        EpgChannel[] listed = [.. channels.Where(IsListedService)];
+        IReadOnlyDictionary<long, int> numbers = IptvChannelNumbers.Assign(listed);
         string origin = Origin(context);
         var builder = new StringBuilder("#EXTM3U\n");
         // 同名の放送局は取り込む側が同じものと見なす。EPGStation は 2 つめ以降へ半角空白を
         // 足して別物にしている。
         var seenNames = new Dictionary<string, int>(StringComparer.Ordinal);
 
-        foreach (EpgChannel channel in channels)
+        foreach (EpgChannel channel in listed)
         {
-            if (channel.ServiceType is { } serviceType && !MediaServiceTypes.Contains(serviceType))
-            {
-                continue;
-            }
-
             string id = channel.Id.ToString(CultureInfo.InvariantCulture);
             string name = halfWidthNames ? channel.HalfWidthName : channel.Name;
             if (seenNames.TryGetValue(name, out int seen))
@@ -73,7 +75,10 @@ internal static class IptvEndpoints
 
             string logo = channel.HasLogoData ? $"tvg-logo=\"{origin}/api/channels/{id}/logo\"" : string.Empty;
             builder.Append("#KODIPROP:mimetype=video/mp2t\n");
-            builder.Append(CultureInfo.InvariantCulture, $"#EXTINF:-1 tvg-id=\"{id}\" {logo} ");
+            // tvg-chno が無いと、取り込む側は並び順のまま 1 から通し番号を振る。地上波・BS・CS が
+            // 一列になってリモコンで選べない。EPGStation は出していないので、ここは意図した差。
+            builder.Append(CultureInfo.InvariantCulture,
+                $"#EXTINF:-1 tvg-id=\"{id}\" tvg-chno=\"{numbers[channel.Id].ToString(CultureInfo.InvariantCulture)}\" {logo} ");
             // 末尾の全角空白は EPGStation がそのまま出しているもの。取り込む側は名前で
             // 突き合わせることがあり、有無が食い違うと別の放送局として扱われる。
             builder.Append(CultureInfo.InvariantCulture, $"group-title=\"{channel.ChannelType}\",{name}\u3000\n");
@@ -103,8 +108,9 @@ internal static class IptvEndpoints
             new EpgScheduleQuery(now, now.AddDays(days), ["GR", "BS", "CS", "SKY"]),
             cancellationToken);
         // EPGStation は番組が 1 つも無いチャンネルを channel 要素ごと省く。
+        // 一覧に出さないサービスも省く。出しても選べず、取り込む側の番組表が伸びるだけ。
         HashSet<long> channelIdsWithPrograms = [.. programs.Select(program => program.ChannelId)];
-        channels = [.. channels.Where(channel => channelIdsWithPrograms.Contains(channel.Id))];
+        channels = [.. channels.Where(channel => channelIdsWithPrograms.Contains(channel.Id) && IsListedService(channel))];
 
         // EPGStation は XmlWriter を使わず文字列を組み立て、禁止文字を全角へ置き換えて
         // 実体参照を一切出さない。取り込む側の実装差が出ないよう、その出力へ揃える。
