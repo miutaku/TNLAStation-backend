@@ -45,6 +45,7 @@ internal static class ContractMapper
         Webm = config.Webm,
         Mp4 = config.Mp4,
         Hls = config.Hls,
+        LowLatency = config.LowLatency,
     };
 
     private static RecordedStreamModesResponse ToResponse(this RecordedStreamModes config) => new()

@@ -29,6 +29,14 @@ public sealed record HlsLiveStartRequest(
     int? Priority = null,
     string? Command = null);
 
+public sealed record LowLatencyLiveStartRequest(
+    long StreamId,
+    long ChannelId,
+    int Height,
+    string VideoBitrate,
+    string AudioBitrate,
+    int? Priority = null);
+
 public sealed record HlsRecordedStartRequest(
     long StreamId,
     string Path,

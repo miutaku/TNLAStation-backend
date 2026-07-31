@@ -43,6 +43,11 @@ public sealed class StreamingOptions
     public int MaxConcurrentStreams { get; init; } = 2;
 
     /// <summary>
+    /// LL-HLS。外部の配信サーバー (MediaMTX) を置いた構成でだけ使える。
+    /// </summary>
+    public LowLatencyHlsOptions? LowLatencyHls { get; init; }
+
+    /// <summary>
     /// null (未設定) ならコード内の既定を使う。EPGStation の stream.live.* と同じく、
     /// 空配列を明示すると「その配信方式を無効化する」意味になる — 未設定と空配列を区別する
     /// 必要があるため、既定値を空配列ではなく null にしてある。
@@ -55,6 +60,15 @@ public sealed class StreamingOptions
     /// 既定を使い、空配列を明示すると無効化になる (<see cref="LiveModes"/> と同じ理由)。
     /// </summary>
     public IReadOnlyList<StreamFormatOptions>? Formats { get; init; }
+}
+
+public sealed class LowLatencyHlsOptions
+{
+    /// <summary>
+    /// 画面が取りに行くプレイリスト。<c>{streamId}</c> を差し替える。
+    /// 空なら LL-HLS は無効で、選択肢にも出さない。
+    /// </summary>
+    public string? PlaylistUrlTemplate { get; init; }
 }
 
 /// <summary>

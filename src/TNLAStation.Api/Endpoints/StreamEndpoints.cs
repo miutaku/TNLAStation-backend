@@ -34,14 +34,20 @@ internal static class StreamEndpoints
             .WithTags("streams")
             .Produces<StartStreamResponse>();
 
+        streams.MapGet("/live/{channelId}/lowlatency", StartLiveLowLatencyAsync)
+            .WithName("StartLiveLowLatency")
+            .WithSummary("低遅延 LL-HLS 配信を開始")
+            .WithTags("streams")
+            .Produces<StartLowLatencyStreamResponse>();
+
         streams.MapGet("/live/{channelId}/m2ts", GetLiveM2tsAsync)
             .WithName("GetLiveM2ts")
             .WithSummary("ライブ M2TS ストリーム")
             .WithTags("streams");
 
         // mp4・webm・m2tsll。HLS と違って途中のファイルを作らず、1 本の流れとして配る。
-        // 上流は形式ごとに別ファイル (streams/live/{channelId}/mp4.ts …) なので、
-        // まとめ書きの {format} ではなく同じ数のルートを立てる。まとめると、上流が 404 を返す
+        // EPGStation は形式ごとに別ファイル (streams/live/{channelId}/mp4.ts …) なので、
+        // まとめ書きの {format} ではなく同じ数のルートを立てる。まとめると、EPGStation が 404 を返す
         // 未知の形式 (/api/streams/live/1/mkv など) まで拾ってしまう。
         foreach ((string format, string name) in LiveTranscodedFormats)
         {
@@ -113,6 +119,17 @@ internal static class StreamEndpoints
     {
         long streamId = await streams.StartHlsAsync(channelId, mode, cancellationToken);
         return Results.Ok(new StartStreamResponse(streamId));
+    }
+
+    /// <summary>プレイリストは配信サーバー上なので、stream id だけでは場所が決まらない。</summary>
+    private static async Task<IResult> StartLiveLowLatencyAsync(
+        long channelId,
+        ILiveStreamService streams,
+        [FromQuery] int mode,
+        CancellationToken cancellationToken = default)
+    {
+        LowLatencyPlayback playback = await streams.StartLowLatencyAsync(channelId, mode, cancellationToken);
+        return Results.Ok(new StartLowLatencyStreamResponse(playback.StreamId, playback.PlaylistUrl));
     }
 
     /// <summary>
@@ -222,7 +239,7 @@ internal static class StreamEndpoints
 
     private static IResult KeepStream(long streamId, ILiveStreamService streams)
     {
-        // 上流 (StreamManageModel.keep) はここで存在チェックをしており、無ければ
+        // EPGStation (StreamManageModel.keep) はここで存在チェックをしており、無ければ
         // StreamIsUndefined を投げて 500 になる (stop はここを無視して 200 のまま)。
         if (!streams.Keep(streamId))
         {

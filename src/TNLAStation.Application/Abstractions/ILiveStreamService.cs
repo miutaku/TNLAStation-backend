@@ -11,6 +11,9 @@ public interface ILiveStreamService
     /// </summary>
     ValueTask<long> StartHlsAsync(long channelId, int mode, CancellationToken cancellationToken);
 
+    /// <summary>LL-HLS の配信を始める。プレイリストは外部の配信サーバー上なので URL も返す。</summary>
+    ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, CancellationToken cancellationToken);
+
     /// <summary>
     /// 録画済みの HLS 配信を始める。ブラウザーは録った MPEG-2 をそのままでは再生できない。
     /// </summary>
@@ -64,6 +67,9 @@ public interface ILiveStreamService
 /// 変換しながら配る 1 本。読み手が閉じたら変換も止まる。
 /// </summary>
 public sealed record TranscodedOutput(Stream Content, string ContentType);
+
+/// <summary>keep と停止は StreamId、再生は PlaylistUrl。</summary>
+public sealed record LowLatencyPlayback(long StreamId, string PlaylistUrl);
 
 /// <summary>
 /// 指定したチャンネルが存在しない、チューナーが空いていない、といった視聴を始められない理由。

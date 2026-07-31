@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using TNLAStation.FfmpegWorker.Mirakurun;
 using TNLAStation.FfmpegWorker.Options;
@@ -21,6 +22,27 @@ public sealed class HlsSessionRegistry(
     public async Task StartLiveAsync(long streamId, long channelId, int height, string videoBitrate, string audioBitrate, int segmentSeconds, int? priority, string? command, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(options.WorkDirectory);
+        ProcessCommand processCommand = command is null
+            ? new ProcessCommand(options.FfmpegPath, HlsArguments.CreateLive(options.WorkDirectory, streamId, height, videoBitrate, audioBitrate, segmentSeconds))
+            : EpgStationStreamCommand.Expand(command, options, "pipe:0", Playlist(streamId), streamId);
+        await StartFromTunerAsync(streamId, channelId, priority, processCommand, cancellationToken);
+    }
+
+    /// <summary>ファイルは書かず、配信サーバーへ送り込む。</summary>
+    public async Task StartLowLatencyAsync(long streamId, long channelId, int height, string videoBitrate, string audioBitrate, int? priority, CancellationToken cancellationToken)
+    {
+        if (options.LowLatencyPublishUrlTemplate is not { Length: > 0 } template)
+        {
+            throw new InvalidOperationException("Ffmpeg:LowLatencyPublishUrlTemplate is not configured.");
+        }
+
+        string publishUrl = template.Replace("{streamId}", streamId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        var processCommand = new ProcessCommand(options.FfmpegPath, HlsArguments.CreateLowLatency(publishUrl, height, videoBitrate, audioBitrate));
+        await StartFromTunerAsync(streamId, channelId, priority, processCommand, cancellationToken);
+    }
+
+    private async Task StartFromTunerAsync(long streamId, long channelId, int? priority, ProcessCommand command, CancellationToken cancellationToken)
+    {
         IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
         Stream source;
         try
@@ -36,10 +58,7 @@ public sealed class HlsSessionRegistry(
         HlsWorkerSession? session = null;
         try
         {
-            ProcessCommand processCommand = command is null
-                ? new ProcessCommand(options.FfmpegPath, HlsArguments.CreateLive(options.WorkDirectory, streamId, height, videoBitrate, audioBitrate, segmentSeconds))
-                : EpgStationStreamCommand.Expand(command, options, "pipe:0", Playlist(streamId), streamId);
-            session = new HlsWorkerSession(streamId, options, source, processCommand, lease);
+            session = new HlsWorkerSession(streamId, options, source, command, lease);
             session.Start();
         }
         catch

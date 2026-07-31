@@ -59,6 +59,52 @@ internal static class HlsArguments
     }
 
     /// <summary>
+    /// LL-HLS。セグメントを切るのは配信サーバーなので、ここは 1 秒ごとのキーフレームを
+    /// 保証して RTSP へ流し込むだけ。遅延を積まないよう溜め込みは全部切る。
+    /// </summary>
+    public static string[] CreateLowLatency(string publishUrl, int height, string videoBitrate, string audioBitrate)
+    {
+        return
+        [
+            "-hide_banner",
+            "-loglevel", "warning",
+            "-fflags", "+discardcorrupt+nobuffer",
+            "-flags", "low_delay",
+            // 通常の HLS より短くして起動を早める。低遅延なのに待たされては意味がない。
+            "-analyzeduration", "3M",
+            "-probesize", "8M",
+            "-dual_mono_mode", "main",
+            "-f", "mpegts",
+            "-i", "pipe:0",
+            "-map", "0:v:0",
+            "-map", "0:a:0",
+            "-ignore_unknown",
+            "-sn",
+            "-dn",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-tune", "zerolatency",
+            "-profile:v", "main",
+            "-vf", $"yadif,scale=-2:{height.ToString(CultureInfo.InvariantCulture)}",
+            "-b:v", videoBitrate,
+            "-maxrate", videoBitrate,
+            // 1 秒ぶん。大きいほど画質は安定するが、その分だけ遅れる。
+            "-bufsize", videoBitrate,
+            "-force_key_frames", "expr:gte(t,n_forced*1)",
+            "-c:a", "aac",
+            "-ar", "48000",
+            "-b:a", audioBitrate,
+            "-ac", "2",
+            "-max_muxing_queue_size", "1024",
+            "-muxdelay", "0",
+            // UDP だと欠けが映像の崩れになって残る。
+            "-f", "rtsp",
+            "-rtsp_transport", "tcp",
+            publishUrl,
+        ];
+    }
+
+    /// <summary>
     /// 録画済みは ffmpeg にファイルを直接読ませる。頭出しは入力の前に置く。後ろに置くと、
     /// 指定した位置まで復号してから捨てることになり、長い録画では待たされる。
     /// </summary>

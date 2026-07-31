@@ -64,6 +64,10 @@ public sealed record TransportStreamConfigurationResponse
     public IReadOnlyList<string>? Mp4 { get; init; }
 
     public IReadOnlyList<string>? Hls { get; init; }
+
+    /// <summary>EPGStation に無い TNLAStation の追加 (docs/compatibility.md)。</summary>
+    [JsonPropertyName("lowlatency")]
+    public IReadOnlyList<string>? LowLatency { get; init; }
 }
 
 public sealed record M2TsStreamParameterResponse(string Name, bool IsUnconverted);

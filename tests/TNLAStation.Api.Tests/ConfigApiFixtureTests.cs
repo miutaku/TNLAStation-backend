@@ -178,7 +178,7 @@ public sealed class ConfigApiFixtureTests : IDisposable
     [Fact]
     public async Task AStreamBlockWithoutItsTsLayerStillEmitsTheEmptyObjects()
     {
-        // 上流は stream.live があれば streamConfig.live = {} を必ず作る。
+        // EPGStation は stream.live があれば streamConfig.live = {} を必ず作る。
         using WebApplicationFactory<Program> factory = CreateFactory("""
             port: 8888
             urlscheme:
@@ -261,6 +261,33 @@ public sealed class ConfigApiFixtureTests : IDisposable
         Assert.Equal("httpsConfigError", document.RootElement.GetProperty("errors").GetString());
     }
 
+    /// <summary>
+    /// LL-HLS は config.yml ではなく配信サーバーの設定で決まる。上の固定 JSON に
+    /// <c>lowlatency</c> が無いことが「未設定なら出さない」側の担保になっている。
+    /// </summary>
+    [Fact]
+    public async Task ConfiguringLowLatencyAddsItsQualitiesToTheLiveStreamChoices()
+    {
+        using WebApplicationFactory<Program> factory = CreateFactory(FullConfigYaml)
+            .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Streaming:LowLatencyHls:PlaylistUrlTemplate"] = "/lowlatency/live/{streamId}/index.m3u8",
+                })));
+        using HttpClient client = factory.CreateClient();
+
+        using JsonDocument document = JsonDocument.Parse(
+            await (await client.GetAsync("/api/config")).Content.ReadAsStringAsync());
+
+        JsonElement ts = document.RootElement
+            .GetProperty("streamConfig").GetProperty("live").GetProperty("ts");
+        Assert.Equal(
+            ["720p", "480p", "360p"],
+            ts.GetProperty("lowlatency").EnumerateArray().Select(mode => mode.GetString()));
+        // EPGStation の鍵は触らない。
+        Assert.Equal(["720p", "480p"], ts.GetProperty("hls").EnumerateArray().Select(mode => mode.GetString()));
+    }
+
     [Fact]
     public async Task BroadcastComesFromTheTunerTypesMirakurunReports()
     {
@@ -299,7 +326,7 @@ public sealed class ConfigApiFixtureTests : IDisposable
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <summary>鍵の順序は上流の代入順で決まるので保つ。空白と改行だけを揃える。</summary>
+    /// <summary>鍵の順序は EPGStation の代入順で決まるので保つ。空白と改行だけを揃える。</summary>
     private static string Canonicalise(string json)
     {
         using JsonDocument document = JsonDocument.Parse(json);

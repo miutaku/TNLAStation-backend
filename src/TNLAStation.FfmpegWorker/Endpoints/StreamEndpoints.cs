@@ -28,6 +28,23 @@ public static class StreamEndpoints
             return Results.Accepted(value: new HlsStartResponse(options.Value.PublicBaseUrl));
         });
 
+        app.MapPost("/streams/lowlatency/live", async (
+            LowLatencyLiveStartRequest request,
+            HlsSessionRegistry registry,
+            IOptions<FfmpegOptions> options,
+            CancellationToken cancellationToken) =>
+        {
+            await registry.StartLowLatencyAsync(
+                request.StreamId,
+                request.ChannelId,
+                request.Height,
+                request.VideoBitrate,
+                request.AudioBitrate,
+                request.Priority,
+                cancellationToken);
+            return Results.Accepted(value: new HlsStartResponse(options.Value.PublicBaseUrl));
+        });
+
         app.MapPost("/streams/hls/recorded", async (
             HlsRecordedStartRequest request,
             HlsSessionRegistry registry,

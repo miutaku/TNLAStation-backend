@@ -40,7 +40,8 @@ public sealed record TransportStreamConfiguration(
     IReadOnlyList<string>? M2TsLl,
     IReadOnlyList<string>? Webm,
     IReadOnlyList<string>? Mp4,
-    IReadOnlyList<string>? Hls);
+    IReadOnlyList<string>? Hls,
+    IReadOnlyList<string>? LowLatency = null);
 
 /// <summary>無変換配信は cmd を持たないので IsUnconverted。TNLAStation は常に無変換の 1 本だけを持つ。</summary>
 public sealed record M2TsStreamParameter(string Name, bool IsUnconverted);

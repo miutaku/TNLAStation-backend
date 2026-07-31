@@ -21,6 +21,12 @@ public sealed class FfmpegOptions
     public string? PublicBaseUrl { get; init; }
 
     /// <summary>
+    /// LL-HLS のとき TS を送り込む先。<c>{streamId}</c> を差し替える。
+    /// 空なら LL-HLS は無効。
+    /// </summary>
+    public string? LowLatencyPublishUrlTemplate { get; init; }
+
+    /// <summary>
     /// エンコード・サムネイル抽出・probe・HLS/変換配信で同時に起動する ffmpeg/ffprobe
     /// プロセス数の上限 (EPGStation の encodeProcessNum 相当)。0 で無制限。
     /// </summary>

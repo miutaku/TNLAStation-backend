@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -123,6 +124,58 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         LogStreamStarted(logger, streamId, channel.Name, quality.Name);
         return streamId;
     }
+
+    /// <summary>
+    /// publish 先は配信サーバーなので、backend からはプレイリストの生成を確認できない。
+    /// 待たずに返し、再生側で拾い直す。
+    /// </summary>
+    public async ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, CancellationToken cancellationToken)
+    {
+        string template = options.LowLatencyHls?.PlaylistUrlTemplate is { Length: > 0 } configured
+            ? configured
+            : throw new LiveStreamException("LowLatencyHlsIsNotConfigured");
+        EpgChannel channel = await epg.GetChannelAsync(channelId, cancellationToken)
+            ?? throw new LiveStreamException("ChannelIsNotFound");
+        LiveStreamModeOptions quality = ResolveMode(mode);
+
+        await startGate.WaitAsync(cancellationToken);
+        long streamId;
+        try
+        {
+            if (sessions.Count >= Math.Max(1, options.MaxConcurrentStreams))
+            {
+                throw new LiveStreamException("StreamIsFull");
+            }
+
+            streamId = Interlocked.Increment(ref lastStreamId);
+            var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
+            sessions[streamId] = record;
+
+            Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
+            using HttpResponseMessage response = await worker.PostAsJsonAsync(
+                new Uri(workerBaseAddress, "streams/lowlatency/live"),
+                new LowLatencyLiveStartRequest(streamId, channelId, quality.Height, quality.VideoBitrate, quality.AudioBitrate, mirakurunOptions.StreamingPriority),
+                JsonOptions,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                sessions.TryRemove(streamId, out _);
+                throw new LiveStreamException("StreamProcessStartFailed");
+            }
+
+            record.WorkerBaseAddress = await ReadWorkerBaseAddressAsync(response, cancellationToken);
+        }
+        finally
+        {
+            startGate.Release();
+        }
+
+        LogStreamStarted(logger, streamId, channel.Name, quality.Name);
+        return new LowLatencyPlayback(streamId, FormatPlaylistUrl(template, streamId));
+    }
+
+    public static string FormatPlaylistUrl(string template, long streamId) =>
+        template.Replace("{streamId}", streamId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
     public async ValueTask<long> StartRecordedHlsAsync(
         long videoFileId,
@@ -717,6 +770,8 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     }
 
     private sealed record HlsLiveStartRequest(long StreamId, long ChannelId, int Height, string VideoBitrate, string AudioBitrate, int SegmentSeconds, int? Priority, string? Command);
+
+    private sealed record LowLatencyLiveStartRequest(long StreamId, long ChannelId, int Height, string VideoBitrate, string AudioBitrate, int? Priority);
 
     private sealed record HlsRecordedStartRequest(long StreamId, string Path, int Height, string VideoBitrate, string AudioBitrate, int SegmentSeconds, double PlayPosition, string Command, bool IsTransportStream);
 

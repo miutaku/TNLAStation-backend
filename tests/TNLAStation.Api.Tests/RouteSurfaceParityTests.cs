@@ -11,10 +11,10 @@ namespace TNLAStation.Api.Tests;
 /// <summary>
 /// 公開しているルートの集合が EPGStation v2.10.0 と 1 件も違わないことを機械的に確かめる。
 ///
-/// 上流の一覧は手で書き写さず、<c>EPGStation/src/model/service/api</c> のファイル配置と
+/// EPGStation の一覧は手で書き写さず、<c>EPGStation/src/model/service/api</c> のファイル配置と
 /// 各ファイルの <c>export const get|post|put|del</c> から毎回作り直す。express-openapi は
 /// ディレクトリ構成をそのままパスに、export 名をそのまま HTTP method に割り当てるため
-/// (<c>ServiceServer.initOpenApi</c> の <c>paths: API_DIR</c>)、これが上流の定義そのもの。
+/// (<c>ServiceServer.initOpenApi</c> の <c>paths: API_DIR</c>)、これが EPGStation の定義そのもの。
 /// EPGStation の作業ツリーが無い環境では、同じ一覧を写した表で照合する。
 /// </summary>
 public sealed class RouteSurfaceParityTests : IDisposable
@@ -23,7 +23,7 @@ public sealed class RouteSurfaceParityTests : IDisposable
 
     /// <summary>
     /// <c>src/model/service/api</c> の走査結果 (v2.10.0 / 5cf2ea383d37937eacecf424820dbd7a278d577e)。
-    /// 上流ツリーがあるときは、この表自体が実配置と一致することも確かめる。
+    /// EPGStation ツリーがあるときは、この表自体が実配置と一致することも確かめる。
     /// </summary>
     private static readonly string[] UpstreamRoutes =
     [
@@ -106,6 +106,15 @@ public sealed class RouteSurfaceParityTests : IDisposable
     ];
 
     /// <summary>
+    /// EPGStation に無い TNLAStation の追加 (docs/compatibility.md)。EPGStation の面は変えないので、
+    /// ここへ挙げた分だけを「余分」の判定から外す。
+    /// </summary>
+    private static readonly string[] AddedRoutes =
+    [
+        "GET /api/streams/live/{channelId}/lowlatency",
+    ];
+
+    /// <summary>
     /// express-openapi の外で <c>ServiceServer</c> が直接生やすルート。
     /// <c>/api/docs</c> は <c>docsPath</c>、<c>/api/debug</c> は Swagger UI へのリダイレクト。
     /// </summary>
@@ -118,7 +127,7 @@ public sealed class RouteSurfaceParityTests : IDisposable
     [Fact]
     public void TheApiSurfaceHasNoExtraAndNoMissingRoutes()
     {
-        HashSet<string> expected = new(UpstreamRoutes.Concat(UpstreamServerRoutes), StringComparer.Ordinal);
+        HashSet<string> expected = new(UpstreamRoutes.Concat(UpstreamServerRoutes).Concat(AddedRoutes), StringComparer.Ordinal);
         HashSet<string> actual = new(GetMappedApiRoutes(), StringComparer.Ordinal);
 
         string[] missing = [.. expected.Except(actual).Order(StringComparer.Ordinal)];
@@ -131,7 +140,7 @@ public sealed class RouteSurfaceParityTests : IDisposable
     }
 
     /// <summary>
-    /// 上流の作業ツリーがあるときだけ走る。この試験が持つ表が、上流のファイル配置から
+    /// EPGStation の作業ツリーがあるときだけ走る。この試験が持つ表が、EPGStation のファイル配置から
     /// 機械的に導いた一覧と一致することを確かめる — 表が古びたまま緑になるのを防ぐ。
     /// </summary>
     [Fact]
@@ -174,7 +183,7 @@ public sealed class RouteSurfaceParityTests : IDisposable
     }
 
     /// <summary>
-    /// ASP.NET のルート制約 (<c>{id:long}</c>) と末尾スラッシュを落として、上流の書き方に揃える。
+    /// ASP.NET のルート制約 (<c>{id:long}</c>) と末尾スラッシュを落として、EPGStation の書き方に揃える。
     /// </summary>
     private static string NormalisePath(string path)
     {

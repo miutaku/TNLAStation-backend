@@ -19,6 +19,9 @@ public sealed record StreamInfoResponse(IReadOnlyList<StreamInfoItemResponse> It
 
 public sealed record StartStreamResponse(long StreamId);
 
+/// <summary>LL-HLS のプレイリストは配信サーバー上にあるので URL を添える。</summary>
+public sealed record StartLowLatencyStreamResponse(long StreamId, string PlaylistUrl);
+
 public sealed record StreamInfoItemResponse(
     long StreamId,
     string Type,
