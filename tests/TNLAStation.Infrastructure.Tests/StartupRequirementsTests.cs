@@ -112,9 +112,8 @@ public sealed class StartupRequirementsTests
     /// リポジトリが配っている <c>config/config.yml.example</c> を実際に読み込み、
     /// そのまま使えば縮退運転にならないことを確かめる。
     ///
-    /// 今回の事故は「例をコピーし忘れて config.yml が無かった」ことが発端だが、例そのものが
-    /// 必要な項目を欠いていれば、コピーしても同じことが起きる。例を直したときに気付けるよう
-    /// 中身まで見る。
+    /// 置き忘れだけでなく、例そのものが必要な項目を欠いていても同じ縮退運転になる。
+    /// 例を直したときに気付けるよう中身まで見る。
     /// </summary>
     [Fact]
     public void TheShippedConfigExampleStartsWithoutDegrading()
@@ -132,7 +131,7 @@ public sealed class StartupRequirementsTests
         // 例をそのまま使えば起動できる。
         StartupRequirements.Validate(configuration, examplePath);
 
-        // Mirakurun の接続先が実際に入っていること (ここが空だと今回と同じ事故になる)。
+        // Mirakurun の接続先が実際に入っていること。空のままでは EPG 更新も録画も動かない。
         string? mirakurunPath = configuration["Mirakurun:BaseUrl"];
         Assert.False(string.IsNullOrWhiteSpace(mirakurunPath));
 

@@ -390,7 +390,7 @@ public sealed class PostgresReserveRepository(
         {
             if (!incoming.Remove(entity.Key, out ReserveAssignment? assignment))
             {
-                // 今回の生成に出てこなかった予約。番組が消えたか、ルールが変わった。
+                // 生成結果に無い予約。番組表から消えたか、ルールが変わった。
                 context.Reserves.Remove(entity);
                 continue;
             }
