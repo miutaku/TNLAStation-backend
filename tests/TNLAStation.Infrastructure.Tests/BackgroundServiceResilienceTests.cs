@@ -93,6 +93,7 @@ public sealed class BackgroundServiceResilienceTests
             Unused.Instance,
             Unused.Instance,
             Unused.Instance,
+            Unused.Instance,
             NullClientNotifier.Instance,
             new RecordingRecovery(Unused.Instance, NullLogger<RecordingRecovery>.Instance),
             Options.Create(new RecordingOptions { PollIntervalSeconds = 1 }),

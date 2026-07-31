@@ -54,6 +54,7 @@ public sealed class RecordingStopTests
         using var scheduler = new RecordingScheduler(
             schedulerReserves,
             store,
+            Unused.Instance,
             new PostgresEpgRepository(database.ContextFactory, Options.Create(new EpgOptions()), clock),
             mirakurun,
             new NoThumbnailService(),
@@ -157,6 +158,7 @@ public sealed class RecordingStopTests
         using var scheduler = new RecordingScheduler(
             reserves,
             store,
+            Unused.Instance,
             new PostgresEpgRepository(
                 database.ContextFactory,
                 Options.Create(new EpgOptions()),
@@ -223,6 +225,96 @@ public sealed class RecordingStopTests
 
             // StopAsync は registry の完了、つまりストリーム破棄と DB 確定より前には返らない。
             Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 予約で選んだエンコードは、録画完了時に待ち行列へ入らなければ誰も走らせない。
+    /// 予約の設定が待ち行列の 1 行になるところまでを実 DB で確かめる。
+    /// </summary>
+    [PostgresFact]
+    public async Task FinishingARecordingQueuesTheEncodeChosenOnTheReserve()
+    {
+        await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
+        await RecordingTestData.SeedEpgAsync(
+            database,
+            RecordingTestData.CreateProgram(startAt: RecordingTestData.Now.AddMinutes(-1)));
+        string directory = Path.Combine(Path.GetTempPath(), $"tnla-recording-encode-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        PostgresReserveRepository reserves = CreateReserves(database);
+        await reserves.AddAsync(
+            ManualOnProgram(programId: 1) with
+            {
+                Encode = new ReserveEncodeSettings(
+                    Mode1: "H.265",
+                    EncodeParentDirectoryName1: null,
+                    Directory1: null,
+                    Mode2: null,
+                    EncodeParentDirectoryName2: null,
+                    Directory2: null,
+                    Mode3: null,
+                    EncodeParentDirectoryName3: null,
+                    Directory3: null,
+                    IsDeleteOriginalAfterEncode: true),
+            },
+            CancellationToken.None);
+        await PublishManualReservesAsync(reserves);
+
+        var clock = RecordingTestData.Clock();
+        var store = new PostgresRecordingStore(database.ContextFactory, clock);
+        var recordedRepository = new PostgresRecordedRepository(database.ContextFactory, clock);
+        var encodeTasks = new PostgresEncodeTaskList(database.ContextFactory, recordedRepository, clock);
+        var jobs = new RecordingJobRegistry();
+        var stream = new BlockingTransportStream();
+        using var scheduler = new RecordingScheduler(
+            reserves,
+            store,
+            encodeTasks,
+            new PostgresEpgRepository(database.ContextFactory, Options.Create(new EpgOptions()), clock),
+            new SingleStreamMirakurun(stream),
+            new NoThumbnailService(),
+            new PostgresRecordedHistoryStore(database.ContextFactory),
+            new CommandHookRunner(NullLogger<CommandHookRunner>.Instance),
+            NullClientNotifier.Instance,
+            new RecordingRecovery(store, NullLogger<RecordingRecovery>.Instance),
+            Options.Create(new RecordingOptions { Directory = directory, PollIntervalSeconds = 1 }),
+            Options.Create(new StorageOptions()),
+            Options.Create(new MirakurunOptions()),
+            Options.Create(new CommandHookOptions()),
+            new ImmediateLeaseProvider(),
+            jobs,
+            new RecordingScheduleSignal(),
+            clock,
+            NullLogger<RecordingScheduler>.Instance);
+        var stop = new PostgresRecordingStopService(database.ContextFactory, reserves, jobs);
+
+        try
+        {
+            await scheduler.StartAsync(CancellationToken.None);
+            await stream.WaitUntilBlockedAsync(TimeSpan.FromSeconds(10));
+
+            var recordings = (IRecordingRepository)recordedRepository;
+            RecordedProgram current = Assert.Single(
+                (await recordings.ListAsync(new RecordedQuery(false), CancellationToken.None)).Items);
+            VideoFile original = Assert.Single(current.VideoFiles!);
+
+            Assert.True(await stop.StopAsync(current.Id, CancellationToken.None));
+
+            EncodeTask queued = Assert.Single(await encodeTasks.ListAsync(CancellationToken.None));
+            Assert.Equal(current.Id, queued.RecordedId);
+            Assert.Equal(original.Id, queued.SourceVideoFileId);
+            Assert.Equal("H.265", queued.Mode);
+            Assert.True(queued.RemoveOriginal);
+            Assert.False(queued.IsRunning);
+            // 出力先の指定が無い予約は、上流の既定と同じく元ファイルの隣へ出す。
+            Assert.Null(queued.ParentDirectoryName);
+            Assert.Null(queued.Directory);
         }
         finally
         {

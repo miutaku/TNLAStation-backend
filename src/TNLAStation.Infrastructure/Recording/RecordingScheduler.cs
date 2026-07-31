@@ -18,6 +18,7 @@ namespace TNLAStation.Infrastructure.Recording;
 public sealed partial class RecordingScheduler(
     IReserveRepository reserves,
     IRecordingStore store,
+    IEncodeTaskList encodeTasks,
     IEpgRepository epg,
     IMirakurunClient mirakurun,
     IThumbnailService thumbnails,
@@ -249,8 +250,11 @@ public sealed partial class RecordingScheduler(
             hookOptions.RecordingStartCommand,
             hookOptions.RecordingFinishCommand,
             hookOptions.RecordingFailedCommand,
+            BuildEncodeOptions(reserve),
+            reserve.IsDeleteOriginalAfterEncode,
             mirakurun,
             store,
+            encodeTasks,
             thumbnails,
             history,
             hooks,
@@ -315,6 +319,42 @@ public sealed partial class RecordingScheduler(
         }
 
         running.Clear();
+    }
+
+    private ReserveEncodeOption[] BuildEncodeOptions(Reservation reserve)
+    {
+        (string? Mode, string? ParentDirectoryName, string? Directory)[] candidates =
+        [
+            (reserve.EncodeMode1, reserve.EncodeParentDirectoryName1, reserve.EncodeDirectory1),
+            (reserve.EncodeMode2, reserve.EncodeParentDirectoryName2, reserve.EncodeDirectory2),
+            (reserve.EncodeMode3, reserve.EncodeParentDirectoryName3, reserve.EncodeDirectory3),
+        ];
+
+        return
+        [
+            .. candidates
+                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Mode))
+                .Select(candidate => new ReserveEncodeOption(
+                    candidate.Mode!,
+                    ResolveEncodeParentDirectory(candidate.ParentDirectoryName),
+                    candidate.Directory)),
+        ];
+    }
+
+    /// <summary>
+    /// 予約が持つのは config の recorded に付けた名前、書き出し先に要るのは path。
+    /// 合う名前が無ければ null にして、上流の既定と同じく元ファイルの隣へ出す。
+    /// </summary>
+    private string? ResolveEncodeParentDirectory(string? name)
+    {
+        if (name is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        return storage.RecordedDirectories
+            .FirstOrDefault(directory => string.Equals(directory.Name, name, StringComparison.Ordinal))
+            ?.Path;
     }
 
     private string? ResolveDirectory() =>

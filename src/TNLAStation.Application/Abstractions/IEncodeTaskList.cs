@@ -13,6 +13,14 @@ public sealed record EncodeRequest(
     bool IsSaveSameDirectory = false);
 
 /// <summary>
+/// 予約に付いていたエンコード設定 1 つ分。録画が終わってから待ち行列へ積む。
+/// </summary>
+public sealed record ReserveEncodeOption(
+    string Mode,
+    string? ParentDirectoryName,
+    string? Directory);
+
+/// <summary>
 /// 実行待ち・実行中の 1 件。
 /// </summary>
 public sealed record EncodeTask(

@@ -36,8 +36,11 @@ internal sealed partial class RecordingSession(
     string? recordingStartCommand,
     string? recordingFinishCommand,
     string? recordingFailedCommand,
+    IReadOnlyList<ReserveEncodeOption> encodeOptions,
+    bool removeOriginalAfterEncode,
     IMirakurunClient mirakurun,
     IRecordingStore store,
+    IEncodeTaskList encodeTasks,
     IThumbnailService thumbnails,
     IRecordedHistoryStore history,
     ICommandHookRunner hooks,
@@ -286,6 +289,8 @@ internal sealed partial class RecordingSession(
             {
                 LogThumbnailFailed(logger, path, exception);
             }
+
+            await EnqueueEncodesAsync();
             hooks.RunRecordedHook(recordingFinishCommand, BuildRecordedPayload(analyzer.Defects, dropLogPath));
             notifier.NotifyClient();
         }
@@ -293,6 +298,35 @@ internal sealed partial class RecordingSession(
         {
             await store.AbortAsync(recordedId, CancellationToken.None);
             LogRecordingEmpty(logger, path);
+        }
+    }
+
+    /// <summary>
+    /// 予約に付いていたエンコードを積む。積むのは録画ファイルと DB が確定した後 — 先に積むと
+    /// worker が書き込み途中のファイルを掴む。位置は上流の
+    /// EPGStation/src/model/event/EventSetter.ts の setFinishRecording に合わせてある。
+    /// </summary>
+    private async Task EnqueueEncodesAsync()
+    {
+        foreach (ReserveEncodeOption option in encodeOptions)
+        {
+            try
+            {
+                await encodeTasks.EnqueueAsync(
+                    new EncodeRequest(
+                        recordedId,
+                        videoFileId,
+                        option.Mode,
+                        removeOriginalAfterEncode,
+                        option.ParentDirectoryName,
+                        option.Directory),
+                    CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                // 積めなくても録画は残る。後から手で頼めるので、ここで落とす価値はない。
+                LogEncodeEnqueueFailed(logger, path, option.Mode, exception);
+            }
         }
     }
 
@@ -383,6 +417,12 @@ internal sealed partial class RecordingSession(
         Level = LogLevel.Warning,
         Message = "Could not create a thumbnail for {Path}")]
     static partial void LogThumbnailFailed(ILogger logger, string path, Exception exception);
+
+    [LoggerMessage(
+        EventId = 4017,
+        Level = LogLevel.Error,
+        Message = "Could not queue the {Mode} encode for {Path}; the recording is kept as it is")]
+    static partial void LogEncodeEnqueueFailed(ILogger logger, string path, string mode, Exception exception);
 
     [LoggerMessage(
         EventId = 4015,

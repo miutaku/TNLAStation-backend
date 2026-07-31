@@ -21,7 +21,8 @@ internal sealed class Unused :
     IRecordedHistoryStore,
     ICommandHookRunner,
     IRecordedItemRepository,
-    IDropLogRepository
+    IDropLogRepository,
+    IEncodeTaskList
 {
     public static readonly Unused Instance = new();
 
@@ -180,5 +181,17 @@ internal sealed class Unused :
         throw NotExpected();
 
     ValueTask<DropLogFileLocation?> IDropLogRepository.GetAsync(long dropLogFileId, CancellationToken cancellationToken) =>
+        throw NotExpected();
+
+    public ValueTask<long> EnqueueAsync(EncodeRequest request, CancellationToken cancellationToken) =>
+        throw NotExpected();
+
+    ValueTask<IReadOnlyList<EncodeTask>> IEncodeTaskList.ListAsync(CancellationToken cancellationToken) =>
+        throw NotExpected();
+
+    public ValueTask<bool> CancelAsync(long encodeId, CancellationToken cancellationToken) =>
+        throw NotExpected();
+
+    public ValueTask<int> CancelForRecordedAsync(long recordedId, CancellationToken cancellationToken) =>
         throw NotExpected();
 }
