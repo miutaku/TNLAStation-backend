@@ -249,20 +249,7 @@ public sealed class RecordingStopTests
 
         PostgresReserveRepository reserves = CreateReserves(database);
         await reserves.AddAsync(
-            ManualOnProgram(programId: 1) with
-            {
-                Encode = new ReserveEncodeSettings(
-                    Mode1: "H.265",
-                    EncodeParentDirectoryName1: null,
-                    Directory1: null,
-                    Mode2: null,
-                    EncodeParentDirectoryName2: null,
-                    Directory2: null,
-                    Mode3: null,
-                    EncodeParentDirectoryName3: null,
-                    Directory3: null,
-                    IsDeleteOriginalAfterEncode: true),
-            },
+            ManualOnProgram(programId: 1) with { Encode = EncodeSettings("H.265", removeOriginal: true) },
             CancellationToken.None);
         await PublishManualReservesAsync(reserves);
 
@@ -315,6 +302,92 @@ public sealed class RecordingStopTests
             // 出力先の指定が無い予約は、上流の既定と同じく元ファイルの隣へ出す。
             Assert.Null(queued.ParentDirectoryName);
             Assert.Null(queued.Directory);
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 録画中の予約編集を、受信を止めずに反映できることを確かめる。積むのは録画が終わってから
+    /// なので、開始時の設定ではなく、終わる直前に届いていた設定が使われる。
+    /// </summary>
+    [PostgresFact]
+    public async Task EditingTheEncodeOptionWhileRecordingChangesWhatIsQueuedWithoutStoppingTheStream()
+    {
+        await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
+        await RecordingTestData.SeedEpgAsync(
+            database,
+            RecordingTestData.CreateProgram(startAt: RecordingTestData.Now.AddMinutes(-1)));
+        string directory = Path.Combine(Path.GetTempPath(), $"tnla-recording-reencode-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        PostgresReserveRepository reserves = CreateReserves(database);
+        await reserves.AddAsync(
+            ManualOnProgram(programId: 1) with { Encode = EncodeSettings("H.264", removeOriginal: false) },
+            CancellationToken.None);
+        await PublishManualReservesAsync(reserves);
+
+        var schedulerReserves = new CountingReserveRepository(reserves);
+        var clock = RecordingTestData.Clock();
+        var scheduleSignal = new RecordingScheduleSignal();
+        var store = new PostgresRecordingStore(database.ContextFactory, clock);
+        var recordedRepository = new PostgresRecordedRepository(database.ContextFactory, clock);
+        var encodeTasks = new PostgresEncodeTaskList(database.ContextFactory, recordedRepository, clock);
+        var jobs = new RecordingJobRegistry();
+        var stream = new BlockingTransportStream();
+        using var scheduler = new RecordingScheduler(
+            schedulerReserves,
+            store,
+            encodeTasks,
+            new PostgresEpgRepository(database.ContextFactory, Options.Create(new EpgOptions()), clock),
+            new SingleStreamMirakurun(stream),
+            new NoThumbnailService(),
+            new PostgresRecordedHistoryStore(database.ContextFactory),
+            new CommandHookRunner(NullLogger<CommandHookRunner>.Instance),
+            NullClientNotifier.Instance,
+            new RecordingRecovery(store, NullLogger<RecordingRecovery>.Instance),
+            // 通知だけで見直させ、経過時間による偶然のtickを除く。
+            Options.Create(new RecordingOptions { Directory = directory, PollIntervalSeconds = 3600 }),
+            Options.Create(new StorageOptions()),
+            Options.Create(new MirakurunOptions()),
+            Options.Create(new CommandHookOptions()),
+            new ImmediateLeaseProvider(),
+            jobs,
+            scheduleSignal,
+            clock,
+            NullLogger<RecordingScheduler>.Instance);
+        var stop = new PostgresRecordingStopService(database.ContextFactory, reserves, jobs);
+
+        try
+        {
+            await scheduler.StartAsync(CancellationToken.None);
+            await stream.WaitUntilBlockedAsync(TimeSpan.FromSeconds(10));
+
+            Reservation reserve = Assert.Single(
+                (await reserves.ListAsync(new ReserveQuery(false), CancellationToken.None)).Items);
+            Assert.True(await reserves.UpdateAsync(
+                reserve.Id,
+                ManualOnProgram(programId: 1) with { Encode = EncodeSettings("H.265", removeOriginal: true) },
+                CancellationToken.None));
+
+            int ticksBeforeEdit = schedulerReserves.ListCount;
+            await scheduleSignal.RequestAsync(CancellationToken.None);
+            await schedulerReserves.WaitForListCountAsync(ticksBeforeEdit + 1, TimeSpan.FromSeconds(10));
+
+            // 予約を編集しても受信は続いている。止まっていればストリームは破棄されている。
+            Assert.False(stream.IsDisposed);
+
+            var recordings = (IRecordingRepository)recordedRepository;
+            RecordedProgram current = Assert.Single(
+                (await recordings.ListAsync(new RecordedQuery(false), CancellationToken.None)).Items);
+            Assert.True(await stop.StopAsync(current.Id, CancellationToken.None));
+
+            EncodeTask queued = Assert.Single(await encodeTasks.ListAsync(CancellationToken.None));
+            Assert.Equal("H.265", queued.Mode);
+            Assert.True(queued.RemoveOriginal);
         }
         finally
         {
@@ -415,6 +488,19 @@ public sealed class RecordingStopTests
             Tags: null,
             Save: null,
             Encode: null);
+
+    private static ReserveEncodeSettings EncodeSettings(string mode, bool removeOriginal) =>
+        new(
+            Mode1: mode,
+            EncodeParentDirectoryName1: null,
+            Directory1: null,
+            Mode2: null,
+            EncodeParentDirectoryName2: null,
+            Directory2: null,
+            Mode3: null,
+            EncodeParentDirectoryName3: null,
+            Directory3: null,
+            IsDeleteOriginalAfterEncode: removeOriginal);
 
     private static async Task PublishManualReservesAsync(PostgresReserveRepository repository)
     {

@@ -250,8 +250,7 @@ public sealed partial class RecordingScheduler(
             hookOptions.RecordingStartCommand,
             hookOptions.RecordingFinishCommand,
             hookOptions.RecordingFailedCommand,
-            BuildEncodeOptions(reserve),
-            reserve.IsDeleteOriginalAfterEncode,
+            BuildEncodePlan(reserve),
             mirakurun,
             store,
             encodeTasks,
@@ -293,6 +292,9 @@ public sealed partial class RecordingScheduler(
                     session.SwitchChannel(reserve.ChannelId);
                 }
 
+                // 録画中の予約編集はここで拾う。積むのは録画が終わってからなので、
+                // 受信を止めずに変換の設定だけを差し替えられる。
+                session.UpdateEncodePlan(BuildEncodePlan(reserve));
                 await session.UpdateEndAtAsync(
                     DateTimeOffset.FromUnixTimeMilliseconds(reserve.EndAt),
                     CancellationToken.None);
@@ -321,7 +323,7 @@ public sealed partial class RecordingScheduler(
         running.Clear();
     }
 
-    private ReserveEncodeOption[] BuildEncodeOptions(Reservation reserve)
+    private ReserveEncodePlan BuildEncodePlan(Reservation reserve)
     {
         (string? Mode, string? ParentDirectoryName, string? Directory)[] candidates =
         [
@@ -330,15 +332,16 @@ public sealed partial class RecordingScheduler(
             (reserve.EncodeMode3, reserve.EncodeParentDirectoryName3, reserve.EncodeDirectory3),
         ];
 
-        return
-        [
-            .. candidates
-                .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Mode))
-                .Select(candidate => new ReserveEncodeOption(
-                    candidate.Mode!,
-                    ResolveEncodeParentDirectory(candidate.ParentDirectoryName),
-                    candidate.Directory)),
-        ];
+        return new ReserveEncodePlan(
+            [
+                .. candidates
+                    .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Mode))
+                    .Select(candidate => new ReserveEncodeOption(
+                        candidate.Mode!,
+                        ResolveEncodeParentDirectory(candidate.ParentDirectoryName),
+                        candidate.Directory)),
+            ],
+            reserve.IsDeleteOriginalAfterEncode);
     }
 
     /// <summary>

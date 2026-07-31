@@ -36,8 +36,7 @@ internal sealed partial class RecordingSession(
     string? recordingStartCommand,
     string? recordingFinishCommand,
     string? recordingFailedCommand,
-    IReadOnlyList<ReserveEncodeOption> encodeOptions,
-    bool removeOriginalAfterEncode,
+    ReserveEncodePlan encodePlan,
     IMirakurunClient mirakurun,
     IRecordingStore store,
     IEncodeTaskList encodeTasks,
@@ -53,6 +52,7 @@ internal sealed partial class RecordingSession(
     private readonly object streamGate = new();
     private long currentChannelId = channelId;
     private long currentEndAt = endAt.ToUnixTimeMilliseconds();
+    private ReserveEncodePlan currentEncodePlan = encodePlan;
     private CancellationTokenSource? activeStreamCancellation;
     private IDisposable? registration;
     private Task? worker;
@@ -75,6 +75,13 @@ internal sealed partial class RecordingSession(
             activeStreamCancellation?.Cancel();
         }
     }
+
+    /// <summary>
+    /// 録画中の予約編集を受ける。積むのは録画が終わってからなので、それまでに届いた設定へ
+    /// 差し替えれば、受信を止めずに変換の内容だけを変えられる。
+    /// </summary>
+    public void UpdateEncodePlan(ReserveEncodePlan updated) =>
+        Interlocked.Exchange(ref currentEncodePlan, updated);
 
     public async ValueTask UpdateEndAtAsync(DateTimeOffset updatedEndAt, CancellationToken cancellationToken)
     {
@@ -308,7 +315,8 @@ internal sealed partial class RecordingSession(
     /// </summary>
     private async Task EnqueueEncodesAsync()
     {
-        foreach (ReserveEncodeOption option in encodeOptions)
+        ReserveEncodePlan plan = Volatile.Read(ref currentEncodePlan);
+        foreach (ReserveEncodeOption option in plan.Options)
         {
             try
             {
@@ -317,7 +325,7 @@ internal sealed partial class RecordingSession(
                         recordedId,
                         videoFileId,
                         option.Mode,
-                        removeOriginalAfterEncode,
+                        plan.RemoveOriginal,
                         option.ParentDirectoryName,
                         option.Directory),
                     CancellationToken.None);

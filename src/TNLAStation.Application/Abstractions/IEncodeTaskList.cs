@@ -21,6 +21,17 @@ public sealed record ReserveEncodeOption(
     string? Directory);
 
 /// <summary>
+/// 1 本の録画に対して積むエンコードの全体。録画中に予約を編集できるので、
+/// 開始時の値ではなく、終わる直前の値を使う。
+/// </summary>
+public sealed record ReserveEncodePlan(
+    IReadOnlyList<ReserveEncodeOption> Options,
+    bool RemoveOriginal)
+{
+    public static readonly ReserveEncodePlan None = new([], false);
+}
+
+/// <summary>
 /// 実行待ち・実行中の 1 件。
 /// </summary>
 public sealed record EncodeTask(
