@@ -426,8 +426,10 @@ public sealed class RecordingStopTests
             "rule.ts",
             CancellationToken.None);
 
-        // 録画中にも予約一覧は再生成され、予約 ID は変わる。registry と録画行が持つ古い ID
-        // だけに頼ると停止できないため、同じ安定キーの新しい予約を引き直せることを確かめる。
+        // 再生成そのものは予約 ID を保つが、番組表から一度落ちて戻った予約は行ごと作り直され、
+        // ID が変わる。registry と録画行が持つ古い ID だけに頼ると停止できないため、同じ
+        // 安定キーの新しい予約を引き直せることを確かめる。
+        await reserves.ReplaceAsync([], RecordingTestData.Now.AddSeconds(30), CancellationToken.None);
         await reserves.ReplaceAsync(
             [RuleAssignment(ruleId: 5, programId: 1)],
             RecordingTestData.Now.AddMinutes(1),

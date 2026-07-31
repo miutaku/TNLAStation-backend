@@ -365,6 +365,12 @@ public sealed class PostgresReserveRepository(
                 .ToHashSet(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// 生成し直した予約表を書き戻す。全消しして入れ直すと、同じ番組の予約でも毎回 id が
+    /// 変わり、id を持ったまま編集や削除を投げるクライアントが必ず失敗する。行の身元は
+    /// <see cref="ReserveEntity.Key"/> (uq_reserves_key) なので、鍵で突き合わせて
+    /// 残す・足す・落とすの 3 つに分け、残る行の id はそのままにする。
+    /// </summary>
     public async ValueTask ReplaceAsync(
         IReadOnlyList<ReserveAssignment> assignments,
         DateTimeOffset generatedAt,
@@ -375,30 +381,57 @@ public sealed class PostgresReserveRepository(
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
-        await context.Reserves.ExecuteDeleteAsync(cancellationToken);
-        context.Reserves.AddRange(assignments.Select(assignment => new ReserveEntity
+        Dictionary<string, ReserveAssignment> incoming = assignments.ToDictionary(
+            assignment => assignment.Target.Key,
+            StringComparer.Ordinal);
+        ReserveEntity[] stored = await context.Reserves.ToArrayAsync(cancellationToken);
+
+        foreach (ReserveEntity entity in stored)
         {
-            Key = assignment.Target.Key,
-            Source = assignment.Target.Source.ToString(),
-            RuleId = assignment.Target.RuleId,
-            ProgramId = assignment.Target.ProgramId,
-            ManualReserveId = assignment.Target.ManualReserveId,
-            ChannelId = assignment.Target.ChannelId,
-            ChannelType = assignment.Target.ChannelType,
-            StartAt = assignment.Target.StartAt,
-            EndAt = assignment.Target.EndAt,
-            Name = assignment.Target.Name,
-            HalfWidthName = assignment.Target.Name,
-            Priority = assignment.Target.Priority,
-            IsSkip = assignment.Target.IsSkip,
-            IsConflict = assignment.IsConflict,
-            IsOverlap = assignment.Target.IsOverlap,
-            TunerIndex = assignment.TunerIndex,
-            GeneratedAt = generatedAt,
-        }));
+            if (!incoming.Remove(entity.Key, out ReserveAssignment? assignment))
+            {
+                // 今回の生成に出てこなかった予約。番組が消えたか、ルールが変わった。
+                context.Reserves.Remove(entity);
+                continue;
+            }
+
+            Apply(entity, assignment, generatedAt);
+        }
+
+        context.Reserves.AddRange(
+            incoming.Values.Select(assignment => Apply(new ReserveEntity(), assignment, generatedAt)));
 
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 生成結果を行へ写す。id には触れない — 触ると予約 id が入れ替わる。
+    /// </summary>
+    private static ReserveEntity Apply(
+        ReserveEntity entity,
+        ReserveAssignment assignment,
+        DateTimeOffset generatedAt)
+    {
+        ReserveTarget target = assignment.Target;
+        entity.Key = target.Key;
+        entity.Source = target.Source.ToString();
+        entity.RuleId = target.RuleId;
+        entity.ProgramId = target.ProgramId;
+        entity.ManualReserveId = target.ManualReserveId;
+        entity.ChannelId = target.ChannelId;
+        entity.ChannelType = target.ChannelType;
+        entity.StartAt = target.StartAt;
+        entity.EndAt = target.EndAt;
+        entity.Name = target.Name;
+        entity.HalfWidthName = target.Name;
+        entity.Priority = target.Priority;
+        entity.IsSkip = target.IsSkip;
+        entity.IsConflict = assignment.IsConflict;
+        entity.IsOverlap = target.IsOverlap;
+        entity.TunerIndex = assignment.TunerIndex;
+        entity.GeneratedAt = generatedAt;
+        return entity;
     }
 
     private static IQueryable<ReserveEntity> ApplyType(IQueryable<ReserveEntity> reserves, string? type) =>

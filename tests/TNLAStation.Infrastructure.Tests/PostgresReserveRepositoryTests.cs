@@ -67,8 +67,7 @@ public sealed class PostgresReserveRepositoryTests
         PostgresReserveRepository repository = Create(database);
         long manualId = await repository.AddAsync(ManualOnProgram(programId: 1), CancellationToken.None);
 
-        // 生成は予約を丸ごと入れ替える。手動予約そのものは入れ替えでは消えないので、
-        // 作り直しても入力から復元できる。
+        // 生成は予約表を書き換える。手動予約そのものは別の表なので、作り直しても残る。
         IReadOnlyList<ManualReserve> manuals = await repository.ListManualReservesAsync(CancellationToken.None);
         await repository.ReplaceAsync(
             [.. manuals.Select(manual => Assign(FromManual(manual), tuner: 0))],
@@ -82,6 +81,43 @@ public sealed class PostgresReserveRepositoryTests
         ManualReserve survivor = Assert.Single(await repository.ListManualReservesAsync(CancellationToken.None));
         Assert.Equal(manualId, survivor.Id);
         Assert.Single((await repository.ListAsync(new ReserveQuery(false), CancellationToken.None)).Items);
+    }
+
+    /// <summary>
+    /// 予約 id は編集・削除の宛先として外へ出ている。生成のたびに振り直すと、画面を開いて
+    /// から保存するまでに再生成が挟まっただけで ReservationIsNotFound になる。
+    /// </summary>
+    [PostgresFact]
+    public async Task RegenerationKeepsTheReserveIdOfEveryProgramThatIsStillReserved()
+    {
+        await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
+        await RecordingTestData.SeedEpgAsync(
+            database,
+            RecordingTestData.CreateProgram(1, eventId: 1),
+            RecordingTestData.CreateProgram(2, eventId: 2));
+        PostgresReserveRepository repository = Create(database);
+        await repository.ReplaceAsync(
+            [RuleAssignment(ruleId: 5, programId: 1), RuleAssignment(ruleId: 5, programId: 2)],
+            RecordingTestData.Now,
+            CancellationToken.None);
+        Dictionary<long, long> before = (await repository.ListAsync(new ReserveQuery(false), CancellationToken.None))
+            .Items.ToDictionary(item => item.ProgramId!.Value, item => item.Id);
+
+        // 2 番目が番組表から落ち、3 番目が増えた回。残った 1 番目の宛先は変わってはいけない。
+        await RecordingTestData.SeedEpgAsync(
+            database,
+            RecordingTestData.CreateProgram(1, eventId: 1),
+            RecordingTestData.CreateProgram(3, eventId: 3));
+        await repository.ReplaceAsync(
+            [RuleAssignment(ruleId: 5, programId: 1), RuleAssignment(ruleId: 5, programId: 3)],
+            RecordingTestData.Now.AddMinutes(10),
+            CancellationToken.None);
+
+        Dictionary<long, long> after = (await repository.ListAsync(new ReserveQuery(false), CancellationToken.None))
+            .Items.ToDictionary(item => item.ProgramId!.Value, item => item.Id);
+        Assert.Equal(before[1], after[1]);
+        Assert.DoesNotContain(2L, after.Keys);
+        Assert.DoesNotContain(after[3], before.Values);
     }
 
     [PostgresFact]
