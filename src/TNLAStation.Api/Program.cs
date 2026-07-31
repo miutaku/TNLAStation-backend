@@ -99,6 +99,11 @@ WebApplication app = builder.Build();
 
 ApiOptions api = app.Services.GetRequiredService<IOptions<ApiOptions>>().Value;
 
+// ルーティングより前に置く。経路が決まった後では 405 が確定していて手が出せない。
+// UseRouting を明示すると、既定で先頭へ差し込まれるものは足されない。
+app.UseMiddleware<HeadRequestMiddleware>();
+app.UseRouting();
+
 // EPGStation の専用 socket.io server は API application を載せない。Kestrel は同じ
 // application pipeline を全 endpoint で共有するため、専用ポートでは socket.io 以外を
 // 明示的に遮断する。

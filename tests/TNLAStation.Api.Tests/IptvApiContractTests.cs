@@ -129,6 +129,27 @@ public sealed class IptvApiContractTests : IDisposable
         Assert.Contains("NHK総合1・東京\u3000\n", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// EPGStation は Express なので GET を定義すると HEAD にも応じる。取り込む前に HEAD で
+    /// 確かめる client があり、405 を返すとそこで諦められる。
+    /// </summary>
+    [Theory]
+    [InlineData("/api/iptv/epg.xml")]
+    [InlineData("/api/iptv/channel.m3u8?mode=0")]
+    [InlineData("/api/version")]
+    public async Task HeadAnswersWhereverGetDoes(string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Head, path);
+        using HttpResponseMessage response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        // 本文は返さないが、長さは GET と同じ値を知らせる。
+        long? head = response.Content.Headers.ContentLength;
+        long body = (await (await client.GetAsync(path)).Content.ReadAsByteArrayAsync()).LongLength;
+        Assert.Equal(body, head);
+    }
+
     public void Dispose()
     {
         client.Dispose();
