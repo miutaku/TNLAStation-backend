@@ -423,6 +423,55 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         return await mirakurun.OpenServiceStreamAsync(channelId, cancellationToken, mirakurunOptions.StreamingPriority);
     }
 
+    /// <summary>
+    /// 流しっぱなしの配信を list へ載せる。keep は届かないので、収集対象から外す
+    /// (畳まれるまで生き続ける)。
+    /// </summary>
+    public ValueTask<IAsyncDisposable> TrackDirectStreamAsync(
+        DirectStreamDescriptor descriptor,
+        CancellationToken cancellationToken)
+    {
+        long streamId = Interlocked.Increment(ref lastStreamId);
+        var record = new SessionRecord(
+            streamId,
+            descriptor.ChannelId,
+            string.Empty,
+            descriptor.Mode,
+            descriptor.VideoFileId,
+            timeProvider.GetUtcNow())
+        {
+            DirectType = descriptor.Type,
+            Client = descriptor.Client,
+        };
+        sessions[streamId] = record;
+        LogStreamStarted(logger, streamId, descriptor.Client ?? descriptor.Type, descriptor.Type);
+        return ValueTask.FromResult<IAsyncDisposable>(new DirectStreamScope(this, streamId));
+    }
+
+    private void ForgetDirectStream(long streamId)
+    {
+        if (sessions.TryRemove(streamId, out _))
+        {
+            LogStreamStopped(logger, streamId, "client disconnected");
+        }
+    }
+
+    /// <summary>読み手が閉じたら list から外す。掴んだままにすると視聴中が残り続ける。</summary>
+    private sealed class DirectStreamScope(RemoteLiveStreamService owner, long streamId) : IAsyncDisposable
+    {
+        private int disposed;
+
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) == 0)
+            {
+                owner.ForgetDirectStream(streamId);
+            }
+
+            return ValueTask.CompletedTask;
+        }
+    }
+
     public async ValueTask StopAllAsync()
     {
         var failures = new List<Exception>();
@@ -456,6 +505,27 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         DateTimeOffset now = timeProvider.GetUtcNow();
         foreach (SessionRecord session in active.OrderBy(item => item.StreamId))
         {
+            if (session.DirectType is { } directType)
+            {
+                EpgProgram? airing = session.ChannelId == 0
+                    ? null
+                    : await FindBroadcastingProgramAsync(session.ChannelId, now, cancellationToken);
+                result.Add(new StreamSession(
+                    session.StreamId,
+                    session.VideoFileId is null ? "LiveStream" : "RecordedStream",
+                    session.Mode,
+                    IsEnable: true,
+                    session.ChannelId,
+                    airing?.Name ?? directType,
+                    ProgramId: airing?.Id,
+                    VideoFileId: session.VideoFileId,
+                    StartAt: (airing?.StartAt ?? session.StartedAt).ToUnixTimeMilliseconds(),
+                    EndAt: (airing?.EndAt ?? session.StartedAt.AddHours(1)).ToUnixTimeMilliseconds(),
+                    Description: airing?.Description,
+                    Client: session.Client));
+                continue;
+            }
+
             if (session.VideoFileId is { } videoFileId)
             {
                 result.Add(new StreamSession(
@@ -611,6 +681,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         DateTimeOffset deadline = timeProvider.GetUtcNow().AddSeconds(-Math.Max(5, options.IdleTimeoutSeconds));
         foreach (SessionRecord session in sessions.Values)
         {
+            // 直接配信は worker を介さず、keep も来ない。読み手が切るまで生かす。
+            if (session.DirectType is not null)
+            {
+                continue;
+            }
+
             HlsStatusResponse? status = await TryGetStatusAsync(session, CancellationToken.None);
             session.IsRunningCached = status?.IsRunning ?? false;
 
@@ -720,6 +796,11 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         public bool IsRunningCached { get; set; } = true;
 
         public Uri? WorkerBaseAddress { get; set; }
+
+        /// <summary>ffmpeg-worker を介さない配信の種別。null なら HLS のセッション。</summary>
+        public string? DirectType { get; set; }
+
+        public string? Client { get; set; }
     }
 
     /// <summary>

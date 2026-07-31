@@ -61,12 +61,30 @@ public interface ILiveStreamService
     /// 限られる。呼び出し側が閉じるまでチューナーを占有する。
     /// </summary>
     ValueTask<Stream> OpenLiveStreamAsync(long channelId, int mode, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 1 本の流しっぱなしの配信を list へ載せる。 IPTV や外部の client からの
+    /// 視聴も /api/streams に出さないと、誰が掴んでいるのか分からない。
+    /// </summary>
+    ValueTask<IAsyncDisposable> TrackDirectStreamAsync(
+        DirectStreamDescriptor descriptor,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
 /// 変換しながら配る 1 本。読み手が閉じたら変換も止まる。
 /// </summary>
 public sealed record TranscodedOutput(Stream Content, string ContentType);
+
+/// <summary>
+/// listへ載せる 1 本。ライブは ChannelId、録画は VideoFileId を持つ。
+/// </summary>
+public sealed record DirectStreamDescriptor(
+    string Type,
+    int Mode,
+    long ChannelId = 0,
+    long? VideoFileId = null,
+    string? Client = null);
 
 /// <summary>keep と停止は StreamId、再生は PlaylistUrl。</summary>
 public sealed record LowLatencyPlayback(long StreamId, string PlaylistUrl);

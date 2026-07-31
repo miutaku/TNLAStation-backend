@@ -192,4 +192,6 @@ public sealed record StreamSession(
     long? StartAt = null,
     long? EndAt = null,
     string? Description = null,
-    string? Extended = null);
+    string? Extended = null,
+    /// <summary>接続元。誰が掴んでいるのか分からないと、止めていいのか判断できない。</summary>
+    string? Client = null);

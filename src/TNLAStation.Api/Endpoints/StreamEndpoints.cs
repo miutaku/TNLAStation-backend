@@ -144,6 +144,9 @@ internal static class StreamEndpoints
         CancellationToken cancellationToken)
     {
         await using Stream source = await streams.OpenLiveStreamAsync(channelId, mode, cancellationToken);
+        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+            new DirectStreamDescriptor("m2ts", mode, channelId, Client: DescribeClient(context)),
+            cancellationToken);
         context.Response.ContentType = "video/mp2t";
         // 放送は終わらないので長さは書けない。書けば、そこで切れたと受け取られる。
         await source.CopyToAsync(context.Response.Body, cancellationToken);
@@ -163,6 +166,9 @@ internal static class StreamEndpoints
             format,
             mode,
             cancellationToken);
+        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+            new DirectStreamDescriptor(format, mode, channelId, Client: DescribeClient(context)),
+            cancellationToken);
         return await WriteAsync(context, output, cancellationToken);
     }
 
@@ -181,7 +187,26 @@ internal static class StreamEndpoints
             mode,
             ss,
             cancellationToken);
+        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+            new DirectStreamDescriptor(format, mode, VideoFileId: videoFileId, Client: DescribeClient(context)),
+            cancellationToken);
         return await WriteAsync(context, output, cancellationToken);
+    }
+
+    /// <summary>
+    /// 誰が掴んでいるのか。止めていいか判断できるよう、address と host を短くまとめる。
+    /// host は長いので頭だけ。
+    /// </summary>
+    private static string DescribeClient(HttpContext context)
+    {
+        string address = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        string agent = context.Request.Headers.UserAgent.ToString();
+        if (agent.Length == 0)
+        {
+            return address;
+        }
+
+        return $"{address} ({(agent.Length > 60 ? agent[..60] : agent)})";
     }
 
     private static async Task<IResult> WriteAsync(

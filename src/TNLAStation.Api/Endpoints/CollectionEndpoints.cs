@@ -251,6 +251,7 @@ internal static class CollectionEndpoints
             session.Name)
         {
             ProgramId = session.ProgramId,
+            Client = session.Client,
             VideoFileId = session.VideoFileId,
             StartAt = session.StartAt,
             EndAt = session.EndAt,
