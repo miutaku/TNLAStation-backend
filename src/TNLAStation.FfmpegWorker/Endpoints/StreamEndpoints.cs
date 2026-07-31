@@ -48,8 +48,8 @@ public static class StreamEndpoints
 
         app.MapGet("/streams/hls/{streamId:long}", (long streamId, HlsSessionRegistry registry) =>
         {
-            (bool found, bool isRunning, string? lastError) = registry.GetStatus(streamId);
-            return Results.Ok(new HlsStatusResponse(found, isRunning, lastError));
+            (bool found, bool isRunning, string? lastError, string? recentOutput) = registry.GetStatus(streamId);
+            return Results.Ok(new HlsStatusResponse(found, isRunning, lastError, recentOutput));
         });
 
         app.MapDelete("/streams/hls/{streamId:long}", async (long streamId, HlsSessionRegistry registry) =>

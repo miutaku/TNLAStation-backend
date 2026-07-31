@@ -32,6 +32,11 @@ public sealed class StreamingOptions
     public int SegmentSeconds { get; init; } = 3;
 
     /// <summary>
+    /// 最初のプレイリストを待つ長さ。地上波 1080p HLS の実測は 20 秒台。
+    /// </summary>
+    public int PlaylistTimeoutSeconds { get; init; } = 90;
+
+    /// <summary>
     /// 同時に開ける配信の数。チューナーの本数を超えて開いても Mirakurun 側で失敗するだけなので、
     /// ここで止めて理由の分かるエラーにする。
     /// </summary>

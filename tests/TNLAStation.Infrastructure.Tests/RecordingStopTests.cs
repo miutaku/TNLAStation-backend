@@ -234,8 +234,7 @@ public sealed class RecordingStopTests
     }
 
     /// <summary>
-    /// 予約で選んだエンコードは、録画完了時に待ち行列へ入らなければ誰も走らせない。
-    /// 予約の設定が待ち行列の 1 行になるところまでを実 DB で確かめる。
+    /// 予約で選んだエンコードが、録画完了時に待ち行列の 1 行になることを実 DB で確かめる。
     /// </summary>
     [PostgresFact]
     public async Task FinishingARecordingQueuesTheEncodeChosenOnTheReserve()
@@ -311,8 +310,7 @@ public sealed class RecordingStopTests
     }
 
     /// <summary>
-    /// 録画中の予約編集を、受信を止めずに反映できることを確かめる。積むのは録画が終わってから
-    /// なので、開始時の設定ではなく、終わる直前に届いていた設定が使われる。
+    /// 録画中に予約を編集しても受信は止まらず、終わる直前の設定で積まれることを確かめる。
     /// </summary>
     [PostgresFact]
     public async Task EditingTheEncodeOptionWhileRecordingChangesWhatIsQueuedWithoutStoppingTheStream()
@@ -426,9 +424,7 @@ public sealed class RecordingStopTests
             "rule.ts",
             CancellationToken.None);
 
-        // 再生成そのものは予約 ID を保つが、番組表から一度落ちて戻った予約は行ごと作り直され、
-        // ID が変わる。registry と録画行が持つ古い ID だけに頼ると停止できないため、同じ
-        // 安定キーの新しい予約を引き直せることを確かめる。
+        // 一度落ちて戻った予約は行ごと作り直され ID が変わる。安定キーで引けることを確かめる。
         await reserves.ReplaceAsync([], RecordingTestData.Now.AddSeconds(30), CancellationToken.None);
         await reserves.ReplaceAsync(
             [RuleAssignment(ruleId: 5, programId: 1)],

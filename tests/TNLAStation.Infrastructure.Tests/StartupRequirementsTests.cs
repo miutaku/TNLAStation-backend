@@ -112,8 +112,7 @@ public sealed class StartupRequirementsTests
     /// リポジトリが配っている <c>config/config.yml.example</c> を実際に読み込み、
     /// そのまま使えば縮退運転にならないことを確かめる。
     ///
-    /// 置き忘れだけでなく、例そのものが必要な項目を欠いていても同じ縮退運転になる。
-    /// 例を直したときに気付けるよう中身まで見る。
+    /// 例そのものが必要な項目を欠いていても同じ縮退運転になるので、中身まで見る。
     /// </summary>
     [Fact]
     public void TheShippedConfigExampleStartsWithoutDegrading()

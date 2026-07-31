@@ -55,14 +55,20 @@ internal sealed class HlsWorkerSession(long streamId, FfmpegOptions options, Str
         }
     }
 
-    /// <summary>直近の ffmpeg 標準エラー出力。プレイリストが出ないまま落ちた理由を伝える。</summary>
-    public string DescribeFailure(string reason)
+    /// <summary>直近の ffmpeg 標準エラー出力。遅いだけの時も読めるよう生死に関わらず返す。</summary>
+    public string? RecentOutput
     {
-        lock (errorOutput)
+        get
         {
-            return errorOutput.Count == 0 ? reason : $"{reason}: {string.Join(" / ", errorOutput)}";
+            lock (errorOutput)
+            {
+                return errorOutput.Count == 0 ? null : string.Join(" / ", errorOutput);
+            }
         }
     }
+
+    public string DescribeFailure(string reason) =>
+        RecentOutput is { } output ? $"{reason}: {output}" : reason;
 
     public async ValueTask DisposeAsync()
     {

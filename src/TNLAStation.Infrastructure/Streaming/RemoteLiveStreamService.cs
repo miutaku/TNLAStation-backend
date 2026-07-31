@@ -485,7 +485,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, options.PlaylistTimeoutSeconds)));
         string playlistPath = PlaylistPath(streamId);
 
         try
@@ -503,7 +503,11 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new LiveStreamException("ffmpeg produced no playlist in time");
+            // 生きている ffmpeg の出力は status からしか取れない。添えないと理由が残らない。
+            HlsStatusResponse? status = await TryGetStatusAsync(session, cancellationToken);
+            throw new LiveStreamException(status?.RecentOutput is { Length: > 0 } output
+                ? $"ffmpeg produced no playlist in time: {output}"
+                : "ffmpeg produced no playlist in time");
         }
     }
 
@@ -718,7 +722,11 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
 
     private sealed record HlsStartResponse(string? WorkerBaseUrl);
 
-    private sealed record HlsStatusResponse(bool Found, bool IsRunning, string? LastError);
+    private sealed record HlsStatusResponse(
+        bool Found,
+        bool IsRunning,
+        string? LastError,
+        string? RecentOutput);
 
     private sealed record TranscodeLiveRequest(long ChannelId, int Height, string VideoBitrate, string AudioBitrate, IReadOnlyList<string> FormatArguments, int? Priority, string? Command);
 

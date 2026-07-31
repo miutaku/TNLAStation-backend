@@ -5,9 +5,7 @@ namespace TNLAStation.Api.Contracts;
 public sealed record StorageInfoResponse(IReadOnlyList<StorageItemResponse> Items);
 
 /// <summary>
-/// Property order follows EPGStation, which builds the disk usage object first and attaches the
-/// name afterwards. <see cref="FileTypes"/> is a TNLAStation addition; it goes last so the
-/// upstream keys keep their order.
+/// Property order follows EPGStation. <see cref="FileTypes"/> is a TNLAStation addition, kept last.
 /// </summary>
 public sealed record StorageItemResponse(
     long Available,

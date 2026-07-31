@@ -212,7 +212,6 @@ public sealed class EpgApiContractTests : IDisposable
             Assert.InRange(item.GetProperty("available").GetInt64(), 0, drive.TotalSize);
 
             // fileTypes は上流に無い TNLAStation の追加 (docs/compatibility.md)。
-            // 画面の容量構成グラフはこの値だけを元にするので、種類と実測値まで確かめる。
             JsonElement[] fileTypes = [.. item.GetProperty("fileTypes").EnumerateArray()];
             JsonElement video = Assert.Single(
                 fileTypes,

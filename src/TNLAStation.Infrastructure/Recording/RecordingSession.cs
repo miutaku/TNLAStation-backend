@@ -77,8 +77,7 @@ internal sealed partial class RecordingSession(
     }
 
     /// <summary>
-    /// 録画中の予約編集を受ける。積むのは録画が終わってからなので、それまでに届いた設定へ
-    /// 差し替えれば、受信を止めずに変換の内容だけを変えられる。
+    /// 録画中の予約編集を受ける。積むのは終了後なので、差し替えても受信は止まらない。
     /// </summary>
     public void UpdateEncodePlan(ReserveEncodePlan updated) =>
         Interlocked.Exchange(ref currentEncodePlan, updated);
@@ -309,9 +308,7 @@ internal sealed partial class RecordingSession(
     }
 
     /// <summary>
-    /// 予約に付いていたエンコードを積む。積むのは録画ファイルと DB が確定した後 — 先に積むと
-    /// worker が書き込み途中のファイルを掴む。位置は上流の
-    /// EPGStation/src/model/event/EventSetter.ts の setFinishRecording に合わせてある。
+    /// 確定後に積む — 先に積むと worker が書き込み途中を掴む。位置は上流 setFinishRecording と同じ。
     /// </summary>
     private async Task EnqueueEncodesAsync()
     {

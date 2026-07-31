@@ -99,15 +99,19 @@ public sealed class HlsSessionRegistry(
 
     private string Playlist(long streamId) => Path.Combine(options.WorkDirectory, $"stream{streamId}.m3u8");
 
-    public (bool Found, bool IsRunning, string? LastError) GetStatus(long streamId)
+    public (bool Found, bool IsRunning, string? LastError, string? RecentOutput) GetStatus(long streamId)
     {
         if (!sessions.TryGetValue(streamId, out HlsWorkerSession? session))
         {
-            return (false, false, null);
+            return (false, false, null, null);
         }
 
         bool running = session.IsRunning;
-        return (true, running, running ? null : session.DescribeFailure("ffmpeg exited"));
+        return (
+            true,
+            running,
+            running ? null : session.DescribeFailure("ffmpeg exited"),
+            session.RecentOutput);
     }
 
     public async ValueTask<bool> StopAsync(long streamId)

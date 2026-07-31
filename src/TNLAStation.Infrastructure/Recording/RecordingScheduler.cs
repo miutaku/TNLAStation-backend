@@ -292,8 +292,7 @@ public sealed partial class RecordingScheduler(
                     session.SwitchChannel(reserve.ChannelId);
                 }
 
-                // 録画中の予約編集はここで拾う。積むのは録画が終わってからなので、
-                // 受信を止めずに変換の設定だけを差し替えられる。
+                // 録画中の予約編集はここで拾う。積むのは終了後なので受信は止まらない。
                 session.UpdateEncodePlan(BuildEncodePlan(reserve));
                 await session.UpdateEndAtAsync(
                     DateTimeOffset.FromUnixTimeMilliseconds(reserve.EndAt),
@@ -345,8 +344,7 @@ public sealed partial class RecordingScheduler(
     }
 
     /// <summary>
-    /// 予約が持つのは config の recorded に付けた名前、書き出し先に要るのは path。
-    /// 合う名前が無ければ null にして、上流の既定と同じく元ファイルの隣へ出す。
+    /// 予約は config の recorded 名を持つが要るのは path。合わなければ null (元ファイルの隣)。
     /// </summary>
     private string? ResolveEncodeParentDirectory(string? name)
     {

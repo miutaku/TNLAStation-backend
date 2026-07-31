@@ -21,8 +21,7 @@ public sealed record ReserveEncodeOption(
     string? Directory);
 
 /// <summary>
-/// 1 本の録画に対して積むエンコードの全体。録画中に予約を編集できるので、
-/// 開始時の値ではなく、終わる直前の値を使う。
+/// 1 本の録画に積むエンコード一式。録画中に編集できるので、終わる直前の値を使う。
 /// </summary>
 public sealed record ReserveEncodePlan(
     IReadOnlyList<ReserveEncodeOption> Options,

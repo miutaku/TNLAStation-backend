@@ -366,10 +366,7 @@ public sealed class PostgresReserveRepository(
     }
 
     /// <summary>
-    /// 生成し直した予約表を書き戻す。全消しして入れ直すと、同じ番組の予約でも毎回 id が
-    /// 変わり、id を持ったまま編集や削除を投げるクライアントが必ず失敗する。行の身元は
-    /// <see cref="ReserveEntity.Key"/> (uq_reserves_key) なので、鍵で突き合わせて
-    /// 残す・足す・落とすの 3 つに分け、残る行の id はそのままにする。
+    /// <see cref="ReserveEntity.Key"/> で差分更新する。全消しだと予約 id が変わって外から追えない。
     /// </summary>
     public async ValueTask ReplaceAsync(
         IReadOnlyList<ReserveAssignment> assignments,

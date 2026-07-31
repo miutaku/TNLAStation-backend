@@ -40,7 +40,12 @@ public sealed record HlsRecordedStartRequest(
     string? Command = null,
     bool IsTransportStream = true);
 
-public sealed record HlsStatusResponse(bool Found, bool IsRunning, string? LastError);
+/// <summary>RecentOutput は走っている間も返す。遅い理由はここにしか出ない。</summary>
+public sealed record HlsStatusResponse(
+    bool Found,
+    bool IsRunning,
+    string? LastError,
+    string? RecentOutput);
 
 public sealed record HlsStartResponse(string? WorkerBaseUrl);
 

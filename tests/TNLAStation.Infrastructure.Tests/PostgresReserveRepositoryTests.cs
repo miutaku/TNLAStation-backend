@@ -84,8 +84,7 @@ public sealed class PostgresReserveRepositoryTests
     }
 
     /// <summary>
-    /// 予約 id は編集・削除の宛先として外へ出ている。生成のたびに振り直すと、画面を開いて
-    /// から保存するまでに再生成が挟まっただけで ReservationIsNotFound になる。
+    /// 予約 id は編集・削除の宛先。振り直すと再生成を挟んだだけで ReservationIsNotFound になる。
     /// </summary>
     [PostgresFact]
     public async Task RegenerationKeepsTheReserveIdOfEveryProgramThatIsStillReserved()
