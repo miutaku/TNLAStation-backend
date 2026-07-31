@@ -25,7 +25,7 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
         string? command,
         CancellationToken cancellationToken)
     {
-        await using IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
+        await using ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Background, cancellationToken);
 
         Directory.CreateDirectory(Path.GetDirectoryName(output) is { Length: > 0 } directory ? directory : ".");
 

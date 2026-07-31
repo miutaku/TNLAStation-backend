@@ -13,7 +13,7 @@ public sealed class MediaProbeRunner(IOptions<FfmpegOptions> options, ProcessGat
 
     public async ValueTask<double?> GetDurationSecondsAsync(string path, CancellationToken cancellationToken)
     {
-        await using IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
+        await using ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Background, cancellationToken);
 
         var startInfo = new ProcessStartInfo(options.FfprobePath)
         {

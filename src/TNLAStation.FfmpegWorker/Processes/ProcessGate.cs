@@ -4,28 +4,64 @@ using TNLAStation.Infrastructure.Transcoding;
 
 namespace TNLAStation.FfmpegWorker.Processes;
 
-/// <summary>
-/// 同時に起動する ffmpeg/ffprobe プロセス数の上限を守る (EPGStation の encodeProcessNum 相当)。
-/// エンコード・サムネイル抽出・probe・HLS 配信・変換配信、すべてのプロセス起動がここを通る。
-/// <see cref="FfmpegOptions.EncodeProcessNum"/> が 0 (既定) なら無制限。
-///
-/// EPGStation は上限に達すると優先度の低いプロセスを kill して割り込ませるが、ここでは
-/// 単純化して空きが出るまで FIFO で待つ。長時間 HLS/変換配信を続ける枠が空かないと後続が
-/// 待たされ続ける点が異なるが、既定値 (無制限) では影響しない。
-/// </summary>
-public sealed class ProcessGate
+public enum ProcessPriority
 {
-    private readonly SemaphoreSlim? semaphore;
+    /// <summary>エンコード・サムネイル・probe。空きを待ち、視聴に割り込まれる。</summary>
+    Background,
+
+    /// <summary>ライブ視聴と変換配信。人が待っているので、空きが無ければ作る。</summary>
+    Viewing,
+}
+
+/// <summary>
+/// 同時に走らせる ffmpeg/ffprobe の本数を CPU の割り当てから決め、視聴を最優先で通す。
+/// プロセス起動はすべてここを通る。
+///
+/// 視聴は空きが無ければ実行中のエンコードを 1 本止めて枠を空ける。止めたエンコードは
+/// 待ち行列へ戻るので、失うのは途中経過だけ。
+/// </summary>
+public sealed class ProcessGate : IDisposable
+{
+    private readonly SemaphoreSlim semaphore;
     private readonly EncodeDrainState drainState;
+    private readonly Lock gate = new();
+    private readonly List<Lease> active = [];
 
     public ProcessGate(IOptions<FfmpegOptions> options, EncodeDrainState drainState)
     {
-        int limit = options.Value.EncodeProcessNum;
-        semaphore = limit > 0 ? new SemaphoreSlim(limit, limit) : null;
+        Capacity = ResolveCapacity(options.Value);
+        semaphore = new SemaphoreSlim(Capacity, Capacity);
         this.drainState = drainState;
     }
 
-    public async Task<IAsyncDisposable> AcquireAsync(CancellationToken cancellationToken)
+    /// <summary>同時に走らせる本数。</summary>
+    public int Capacity { get; }
+
+    /// <summary>視聴が使っている本数。backend はこれを見て受け付けるかどうかを決める。</summary>
+    public int ActiveViewing
+    {
+        get
+        {
+            lock (gate)
+            {
+                return active.Count(lease => lease.Priority == ProcessPriority.Viewing);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 割り当てられた CPU から決める。.NET の ProcessorCount は cgroup の制限を反映するので、
+    /// コンテナでもホストの実コア数にはならない。EPGStation の encodeProcessNum は天井として
+    /// 併用する — CPU があっても、それ以上は並べない。
+    /// </summary>
+    private static int ResolveCapacity(FfmpegOptions options)
+    {
+        double cost = options.StreamCpuCost > 0 ? options.StreamCpuCost : 1;
+        int fromCpu = Math.Max(1, (int)Math.Floor(Environment.ProcessorCount / cost));
+        return options.EncodeProcessNum > 0 ? Math.Min(fromCpu, options.EncodeProcessNum) : fromCpu;
+    }
+
+    public async Task<ProcessLease> AcquireAsync(ProcessPriority priority, CancellationToken cancellationToken)
     {
         if (!drainState.TryBeginWork())
         {
@@ -34,13 +70,17 @@ public sealed class ProcessGate
 
         try
         {
-            if (semaphore is null)
+            if (priority == ProcessPriority.Viewing && !semaphore.Wait(0, CancellationToken.None))
             {
-                return new Lease(null, drainState);
+                PreemptNewestBackground();
+                await semaphore.WaitAsync(cancellationToken);
+            }
+            else if (priority == ProcessPriority.Background)
+            {
+                await semaphore.WaitAsync(cancellationToken);
             }
 
-            await semaphore.WaitAsync(cancellationToken);
-            return new Lease(semaphore, drainState);
+            return Register(priority);
         }
         catch
         {
@@ -49,20 +89,78 @@ public sealed class ProcessGate
         }
     }
 
-    private sealed class Lease(SemaphoreSlim? semaphore, EncodeDrainState drainState) : IAsyncDisposable
+    /// <summary>
+    /// 新しく始めたものから止める。長く走っているエンコードほど、やり直しで捨てる時間が大きい。
+    /// </summary>
+    private void PreemptNewestBackground()
     {
+        Lease? victim;
+        lock (gate)
+        {
+            victim = active
+                .Where(lease => lease.Priority == ProcessPriority.Background)
+                .OrderByDescending(lease => lease.StartedAt)
+                .FirstOrDefault();
+        }
+
+        victim?.Preempt();
+    }
+
+    public void Dispose() => semaphore.Dispose();
+
+    private Lease Register(ProcessPriority priority)
+    {
+        var lease = new Lease(priority, Release);
+        lock (gate)
+        {
+            active.Add(lease);
+        }
+
+        return lease;
+    }
+
+    private void Release(Lease lease)
+    {
+        lock (gate)
+        {
+            active.Remove(lease);
+        }
+
+        semaphore.Release();
+        drainState.EndWork();
+    }
+
+    private sealed class Lease(ProcessPriority priority, Action<Lease> release) : ProcessLease
+    {
+        private readonly CancellationTokenSource preempted = new();
         private int released;
 
-        public ValueTask DisposeAsync()
+        public ProcessPriority Priority { get; } = priority;
+
+        public long StartedAt { get; } = Environment.TickCount64;
+
+        public override CancellationToken Preempted => preempted.Token;
+
+        public void Preempt() => preempted.Cancel();
+
+        public override ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref released, 1) != 0)
             {
                 return ValueTask.CompletedTask;
             }
 
-            semaphore?.Release();
-            drainState.EndWork();
+            release(this);
+            preempted.Dispose();
             return ValueTask.CompletedTask;
         }
     }
+}
+
+/// <summary>確保した 1 枠。<see cref="Preempted"/> が立ったら視聴に譲る。</summary>
+public abstract class ProcessLease : IAsyncDisposable
+{
+    public abstract CancellationToken Preempted { get; }
+
+    public abstract ValueTask DisposeAsync();
 }

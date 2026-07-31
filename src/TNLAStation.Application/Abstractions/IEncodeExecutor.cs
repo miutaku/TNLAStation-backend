@@ -31,3 +31,8 @@ public interface IEncodeExecutor
         Func<int?, string?, CancellationToken, Task> onProgress,
         CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// 視聴に枠を譲るために止められた。失敗ではないので、待ち行列へ戻してやり直す。
+/// </summary>
+public sealed class EncodePreemptedException() : Exception("The encode was stopped to make room for viewing.");

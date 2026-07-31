@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Options;
+using TNLAStation.Application.Abstractions;
 using TNLAStation.FfmpegWorker.Options;
 using TNLAStation.FfmpegWorker.Processes;
 
@@ -41,7 +42,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
     {
         double? totalSeconds = await probe.GetDurationSecondsAsync(input, cancellationToken);
 
-        await using IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
+        await using ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Background, cancellationToken);
 
         using var timeoutSource = new CancellationTokenSource();
         if (totalSeconds is { } durationSeconds and > 0 && rateTimeoutMultiplier is { } rate and > 0)
@@ -49,7 +50,10 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
             timeoutSource.CancelAfter(TimeSpan.FromSeconds(durationSeconds * rate));
         }
 
-        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            timeoutSource.Token,
+            lease.Preempted);
         CancellationToken effectiveToken = linked.Token;
 
         var startInfo = new ProcessStartInfo
@@ -115,6 +119,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         bool dirty = false;
         bool stopped;
         bool succeeded = false;
+        bool preempted = false;
         Exception? failure = null;
 
         async Task FlushAsync()
@@ -166,6 +171,10 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
             // 呼び出し元による本当の取り消し。そのまま伝える。
             throw;
         }
+        catch (OperationCanceledException) when (lease.Preempted.IsCancellationRequested)
+        {
+            preempted = true;
+        }
         catch (OperationCanceledException)
         {
             // rate タイムアウト。取り消しではなく、暴走したエンコードの失敗として扱う。
@@ -183,6 +192,11 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         if (!stopped)
         {
             throw new InvalidOperationException("EncodeProcessDidNotExit");
+        }
+
+        if (preempted)
+        {
+            throw new EncodePreemptedException();
         }
 
         if (failure is not null)

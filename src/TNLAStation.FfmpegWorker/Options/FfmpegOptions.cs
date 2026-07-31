@@ -28,7 +28,14 @@ public sealed class FfmpegOptions
 
     /// <summary>
     /// エンコード・サムネイル抽出・probe・HLS/変換配信で同時に起動する ffmpeg/ffprobe
-    /// プロセス数の上限 (EPGStation の encodeProcessNum 相当)。0 で無制限。
+    /// プロセス数の上限 (EPGStation の encodeProcessNum 相当)。0 なら
+    /// <see cref="StreamCpuCost"/> と割り当て CPU から決める。
     /// </summary>
     public int EncodeProcessNum { get; init; }
+
+    /// <summary>
+    /// ライブ 1 本の変換が要る CPU コア数。実測 (地上波 1080i → 720p) は 1.1〜1.2。
+    /// 同時本数の上限はこの値で割って決まるので、下げすぎると全部が実時間に追いつかなくなる。
+    /// </summary>
+    public double StreamCpuCost { get; init; } = 1.2;
 }

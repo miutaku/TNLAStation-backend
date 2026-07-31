@@ -43,7 +43,7 @@ public sealed class HlsSessionRegistry(
 
     private async Task StartFromTunerAsync(long streamId, long channelId, int? priority, ProcessCommand command, CancellationToken cancellationToken)
     {
-        IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
+        ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Viewing, cancellationToken);
         Stream source;
         try
         {
@@ -82,7 +82,7 @@ public sealed class HlsSessionRegistry(
     public async Task StartRecordedAsync(long streamId, string path, int height, string videoBitrate, string audioBitrate, int segmentSeconds, double playPosition, string? command, bool isTransportStream)
     {
         Directory.CreateDirectory(options.WorkDirectory);
-        IAsyncDisposable lease = await gate.AcquireAsync(CancellationToken.None);
+        ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Viewing, CancellationToken.None);
         Stream? source = null;
         HlsWorkerSession? session = null;
         try

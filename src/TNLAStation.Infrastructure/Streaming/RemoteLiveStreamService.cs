@@ -83,10 +83,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         long streamId;
         try
         {
-            if (sessions.Count >= Math.Max(1, options.MaxConcurrentStreams))
-            {
-                throw new LiveStreamException("StreamIsFull");
-            }
+            await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
             var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
@@ -142,10 +139,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         long streamId;
         try
         {
-            if (sessions.Count >= Math.Max(1, options.MaxConcurrentStreams))
-            {
-                throw new LiveStreamException("StreamIsFull");
-            }
+            await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
             var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
@@ -174,6 +168,22 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         return new LowLatencyPlayback(streamId, FormatPlaylistUrl(template, streamId));
     }
 
+    /// <summary>
+    /// 空きが無ければ理由の分かるエラーにする。上限は worker が CPU から報告した定員の合計で、
+    /// 設定で明示されていればそちらを天井にする。worker へ問い合わせられないときは既存の
+    /// セッション数を信じて通す — 数えられないことを理由に視聴を止める必要はない。
+    /// </summary>
+    private async Task EnsureRoomForOneMoreAsync(CancellationToken cancellationToken)
+    {
+        int limit = options.MaxConcurrentStreams > 0
+            ? options.MaxConcurrentStreams
+            : await workerSelector.ReadViewingCapacityAsync(worker, cancellationToken);
+        if (limit > 0 && sessions.Count >= limit)
+        {
+            throw new LiveStreamException("StreamIsFull");
+        }
+    }
+
     public static string FormatPlaylistUrl(string template, long streamId) =>
         template.Replace("{streamId}", streamId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
@@ -197,10 +207,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         long streamId;
         try
         {
-            if (sessions.Count >= Math.Max(1, options.MaxConcurrentStreams))
-            {
-                throw new LiveStreamException("StreamIsFull");
-            }
+            await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
             var record = new SessionRecord(streamId, channelId: 0, file.Name, mode, videoFileId, timeProvider.GetUtcNow());

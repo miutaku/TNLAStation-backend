@@ -84,7 +84,7 @@ public sealed class StreamingWorkerSelector(IOptions<FfmpegWorkerOptions> option
             string nodeName = string.IsNullOrWhiteSpace(health?.NodeName)
                 ? candidate.Host
                 : health.NodeName;
-            return new WorkerHealth(candidate, nodeName, Math.Max(0, health?.ActiveCount ?? 0));
+            return new WorkerHealth(candidate, nodeName, Math.Max(0, health?.ActiveCount ?? 0), Math.Max(0, health?.Capacity ?? 0));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -106,7 +106,23 @@ public sealed class StreamingWorkerSelector(IOptions<FfmpegWorkerOptions> option
     private static string EnsureTrailingSlash(string value) =>
         value.EndsWith('/') ? value : $"{value}/";
 
-    private sealed record HealthResponse(int ActiveCount, string? NodeName);
+    /// <summary>
+    /// 受け付けられる視聴の総数。worker が自分の CPU から報告した定員の合計。
+    /// k8s で pod が増えればそのまま増える。到達できる worker が無ければ 0。
+    /// </summary>
+    public async Task<int> ReadViewingCapacityAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        if (candidates.Length == 0)
+        {
+            WorkerHealth? single = await ReadHealthAsync(client, client.BaseAddress!, cancellationToken);
+            return single?.Capacity ?? 0;
+        }
 
-    private sealed record WorkerHealth(Uri BaseAddress, string NodeName, int ActiveCount);
+        WorkerHealth[] ready = await ReadReadyWorkersAsync(client, cancellationToken);
+        return ready.Sum(item => item.Capacity);
+    }
+
+    private sealed record HealthResponse(int ActiveCount, int Capacity, int ActiveViewing, string? NodeName);
+
+    private sealed record WorkerHealth(Uri BaseAddress, string NodeName, int ActiveCount, int Capacity);
 }

@@ -66,13 +66,16 @@ builder.Services.AddSingleton<TranscodeStreamer>();
 
 WebApplication app = builder.Build();
 
-app.MapGet("/health", (EncodeDrainState drainState, IConfiguration configuration) =>
+// capacity と activeViewing は backend の受け付け判断に使う。ここが唯一の情報源。
+app.MapGet("/health", (EncodeDrainState drainState, ProcessGate gate, IConfiguration configuration) =>
     drainState.IsDraining
         ? Results.StatusCode(StatusCodes.Status503ServiceUnavailable)
         : Results.Ok(new
         {
             status = "ok",
             activeCount = drainState.ActiveCount,
+            capacity = gate.Capacity,
+            activeViewing = gate.ActiveViewing,
             nodeName = configuration["Worker:NodeName"],
         }));
 app.MapPost("/internal/drain", async (EncodeDrainState drainState, HttpContext context) =>

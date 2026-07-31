@@ -12,6 +12,7 @@ public static class EncodeEndpoints
         {
             context.Response.ContentType = "application/x-ndjson";
             bool succeeded = false;
+            bool preempted = false;
             Exception? failure = null;
             try
             {
@@ -26,6 +27,10 @@ public static class EncodeEndpoints
                         await WriteLineAsync(context, new EncodeProgress(Done: false, Succeeded: false, percent, log), cancellationToken),
                     context.RequestAborted);
             }
+            catch (TNLAStation.Application.Abstractions.EncodePreemptedException)
+            {
+                preempted = true;
+            }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 failure = exception;
@@ -33,7 +38,7 @@ public static class EncodeEndpoints
 
             await WriteLineAsync(
                 context,
-                new EncodeProgress(Done: true, Succeeded: succeeded, Percent: null, Log: failure?.Message),
+                new EncodeProgress(Done: true, Succeeded: succeeded, Percent: null, Log: failure?.Message, Preempted: preempted),
                 CancellationToken.None);
         });
     }

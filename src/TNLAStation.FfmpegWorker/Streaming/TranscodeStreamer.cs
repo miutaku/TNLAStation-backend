@@ -16,7 +16,7 @@ public sealed class TranscodeStreamer(WorkerMirakurunClient mirakurun, IOptions<
 
     public async Task<Stream> OpenLiveAsync(long channelId, int height, string videoBitrate, string audioBitrate, IReadOnlyList<string> formatArguments, int? priority, string? command, CancellationToken cancellationToken)
     {
-        IAsyncDisposable lease = await gate.AcquireAsync(cancellationToken);
+        ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Viewing, cancellationToken);
         Stream source;
         try
         {
@@ -47,7 +47,7 @@ public sealed class TranscodeStreamer(WorkerMirakurunClient mirakurun, IOptions<
 
     public async Task<Stream> OpenRecordedAsync(string path, int height, string videoBitrate, string audioBitrate, IReadOnlyList<string> formatArguments, double playPosition, string? command, bool isTransportStream)
     {
-        IAsyncDisposable lease = await gate.AcquireAsync(CancellationToken.None);
+        ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Viewing, CancellationToken.None);
         Stream? source = null;
         try
         {

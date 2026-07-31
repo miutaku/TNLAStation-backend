@@ -37,10 +37,11 @@ public sealed class StreamingOptions
     public int PlaylistTimeoutSeconds { get; init; } = 90;
 
     /// <summary>
-    /// 同時に開ける配信の数。チューナーの本数を超えて開いても Mirakurun 側で失敗するだけなので、
-    /// ここで止めて理由の分かるエラーにする。
+    /// 同時に開ける配信の数の上限。0 (既定) なら ffmpeg-worker が自分の CPU から報告した
+    /// 定員の合計を使う — worker が増えれば上限も増える。チューナー本数のように CPU 以外で
+    /// 縛りたいときだけ明示する。
     /// </summary>
-    public int MaxConcurrentStreams { get; init; } = 2;
+    public int MaxConcurrentStreams { get; init; }
 
     /// <summary>
     /// LL-HLS。外部の配信サーバー (MediaMTX) を置いた構成でだけ使える。

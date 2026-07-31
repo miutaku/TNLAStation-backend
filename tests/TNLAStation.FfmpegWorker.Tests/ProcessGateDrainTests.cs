@@ -13,13 +13,13 @@ public sealed class ProcessGateDrainTests
         var gate = new ProcessGate(
             Microsoft.Extensions.Options.Options.Create(new FfmpegOptions()),
             drainState);
-        IAsyncDisposable running = await gate.AcquireAsync(CancellationToken.None);
+        ProcessLease running = await gate.AcquireAsync(ProcessPriority.Background, CancellationToken.None);
 
         Task drain = drainState.DrainAsync(CancellationToken.None);
 
         Assert.False(drain.IsCompleted);
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => gate.AcquireAsync(CancellationToken.None));
+            () => gate.AcquireAsync(ProcessPriority.Background, CancellationToken.None));
 
         await running.DisposeAsync();
         await drain;
