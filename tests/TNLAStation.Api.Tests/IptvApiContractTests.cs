@@ -25,6 +25,8 @@ public sealed class IptvApiContractTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.StartsWith("application/x-mpegURL", response.Content.Headers.ContentType?.MediaType);
+        // charset を書かないと取り込む側が Latin-1 として読み、放送局名が化ける。
+        Assert.Equal("\"UTF-8\"", response.Content.Headers.ContentType?.CharSet);
         string body = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("#EXTM3U", body, StringComparison.Ordinal);
         // 種データのチャンネルは serviceType: 1 (デジタルTVサービス) なので必ず出る。

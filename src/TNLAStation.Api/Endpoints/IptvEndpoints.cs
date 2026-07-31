@@ -81,7 +81,11 @@ internal static class IptvEndpoints
                 $"{origin}/api/streams/live/{id}/m2ts?mode={mode.ToString(CultureInfo.InvariantCulture)}\n");
         }
 
-        return Results.Text(builder.ToString(), "application/x-mpegURL");
+        // charset を書かないと、取り込む側が Latin-1 として読んで放送局名が化ける。
+        // Results.Text は charset を解釈して落とすので、EPGStation と同じ形をそのまま出す。
+        return Results.File(
+            new UTF8Encoding(false).GetBytes(builder.ToString()),
+            "application/x-mpegURL; charset=\"UTF-8\"");
     }
 
     private static async Task<IResult> GetEpgAsync(
