@@ -28,21 +28,33 @@ public sealed class IptvApiContractTests : IDisposable
         string body = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("#EXTM3U", body, StringComparison.Ordinal);
         // 種データのチャンネルは serviceType: 1 (デジタルTVサービス) なので必ず出る。
-        // 未指定は全角。EPGStation は schema に default: true と書きながら、実装では未指定を
-        // undefined のまま比較するため全角のまま返る。
-        Assert.Contains("ＮＨＫ総合１・東京", body, StringComparison.Ordinal);
+        // 放送局名は未指定でも半角。EPGStation の応答がそうなっている。
+        Assert.Contains("NHK総合1・東京", body, StringComparison.Ordinal);
         // 種データは hasLogoData: true なのでロゴ URL が付く。
         Assert.Contains("tvg-logo=", body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ChannelListUsesHalfWidthNameWhenRequested()
+    public async Task ChannelListUsesFullWidthNameWhenAskedTo()
     {
-        using HttpResponseMessage response = await client.GetAsync("/api/iptv/channel.m3u8?mode=0&isHalfWidth=true");
+        using HttpResponseMessage response = await client.GetAsync("/api/iptv/channel.m3u8?mode=0&isHalfWidth=false");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("NHK総合1・東京", body, StringComparison.Ordinal);
+        Assert.Contains("ＮＨＫ総合１・東京", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// EPGStation は放送局名だけ半角、番組名と説明は全角で返す。取り込む側は同じ値を見て
+    /// 突き合わせるので、この食い違いごと写す。
+    /// </summary>
+    [Fact]
+    public async Task TheDefaultWidthDiffersBetweenChannelNamesAndProgrammeText()
+    {
+        string epg = await (await client.GetAsync("/api/iptv/epg.xml")).Content.ReadAsStringAsync();
+
+        Assert.Contains("<display-name lang=\"ja_JP\">NHK総合1・東京</display-name>", epg, StringComparison.Ordinal);
+        Assert.Contains("モック放送中番組", epg, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -55,8 +67,8 @@ public sealed class IptvApiContractTests : IDisposable
         string playlist = await (await client.GetAsync("/api/iptv/channel.m3u8?mode=0")).Content.ReadAsStringAsync();
         string epg = await (await client.GetAsync("/api/iptv/epg.xml")).Content.ReadAsStringAsync();
 
-        Assert.Contains("ＮＨＫ総合１・東京", playlist, StringComparison.Ordinal);
-        Assert.Contains("<display-name lang=\"ja_JP\">ＮＨＫ総合１・東京</display-name>", epg, StringComparison.Ordinal);
+        Assert.Contains("NHK総合1・東京", playlist, StringComparison.Ordinal);
+        Assert.Contains("<display-name lang=\"ja_JP\">NHK総合1・東京</display-name>", epg, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -112,7 +124,7 @@ public sealed class IptvApiContractTests : IDisposable
     {
         string body = await (await client.GetAsync("/api/iptv/channel.m3u8?mode=0")).Content.ReadAsStringAsync();
 
-        Assert.Contains("ＮＨＫ総合１・東京\u3000\n", body, StringComparison.Ordinal);
+        Assert.Contains("NHK総合1・東京\u3000\n", body, StringComparison.Ordinal);
     }
 
     public void Dispose()

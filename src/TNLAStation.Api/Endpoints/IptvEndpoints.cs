@@ -41,11 +41,10 @@ internal static class IptvEndpoints
         HttpContext context,
         IEpgRepository repository,
         [FromQuery] int mode,
-        // EPGStation は schema に default: true と書きながら、実装では未指定を undefined のまま
-        // 比較するため全角のまま返る (isHalfWidth === true が偽になる)。実装側に合わせる。
-        [FromQuery] bool isHalfWidth = false,
+        [FromQuery] bool? isHalfWidth = null,
         CancellationToken cancellationToken = default)
     {
+        bool halfWidthNames = isHalfWidth ?? ChannelNameDefaultsToHalfWidth;
         IReadOnlyList<EpgChannel> channels = await repository.ListChannelsAsync(cancellationToken);
         string origin = Origin(context);
         var builder = new StringBuilder("#EXTM3U\n");
@@ -61,7 +60,7 @@ internal static class IptvEndpoints
             }
 
             string id = channel.Id.ToString(CultureInfo.InvariantCulture);
-            string name = isHalfWidth ? channel.HalfWidthName : channel.Name;
+            string name = halfWidthNames ? channel.HalfWidthName : channel.Name;
             if (seenNames.TryGetValue(name, out int seen))
             {
                 seenNames[name] = seen + 1;
@@ -89,9 +88,11 @@ internal static class IptvEndpoints
         IEpgRepository repository,
         TimeProvider timeProvider,
         [FromQuery] int days = 3,
-        [FromQuery] bool isHalfWidth = false,
+        [FromQuery] bool? isHalfWidth = null,
         CancellationToken cancellationToken = default)
     {
+        bool halfWidthNames = isHalfWidth ?? ChannelNameDefaultsToHalfWidth;
+        bool halfWidthPrograms = isHalfWidth ?? ProgramTextDefaultsToHalfWidth;
         DateTimeOffset now = timeProvider.GetUtcNow();
         IReadOnlyList<EpgChannel> channels = await repository.ListChannelsAsync(cancellationToken);
         IReadOnlyList<EpgProgram> programs = await repository.FindProgramsAsync(
@@ -122,7 +123,7 @@ internal static class IptvEndpoints
             builder.Append(CultureInfo.InvariantCulture,
                 $"<channel id=\"{channel.Id.ToString(CultureInfo.InvariantCulture)}\" tp=\"{channel.Channel}\">");
             builder.Append(CultureInfo.InvariantCulture,
-                $"<display-name lang=\"ja_JP\">{(isHalfWidth ? channel.HalfWidthName : channel.Name)}</display-name>");
+                $"<display-name lang=\"ja_JP\">{(halfWidthNames ? channel.HalfWidthName : channel.Name)}</display-name>");
             builder.Append(CultureInfo.InvariantCulture,
                 $"<service_id>{channel.ServiceId.ToString(CultureInfo.InvariantCulture)}</service_id>");
             builder.Append("</channel>\n");
@@ -132,12 +133,12 @@ internal static class IptvEndpoints
                 builder.Append(CultureInfo.InvariantCulture,
                     $"<programme start=\"{FormatTime(program.StartAt)}\" stop=\"{FormatTime(program.EndAt)}\" channel=\"{program.ChannelId.ToString(CultureInfo.InvariantCulture)}\">");
                 builder.Append(CultureInfo.InvariantCulture,
-                    $"<title lang=\"ja_JP\">{Sanitise(isHalfWidth ? program.HalfWidthName : program.Name)}</title>");
+                    $"<title lang=\"ja_JP\">{Sanitise(halfWidthPrograms ? program.HalfWidthName : program.Name)}</title>");
 
-                string? description = isHalfWidth ? program.HalfWidthDescription : program.Description;
+                string? description = halfWidthPrograms ? program.HalfWidthDescription : program.Description;
                 if (description is not null)
                 {
-                    string? extended = isHalfWidth ? program.HalfWidthExtended : program.Extended;
+                    string? extended = halfWidthPrograms ? program.HalfWidthExtended : program.Extended;
                     builder.Append(CultureInfo.InvariantCulture,
                         $"    <desc lang=\"ja_JP\">{Sanitise(description)}{Sanitise(extended)}</desc>");
                 }
@@ -150,6 +151,15 @@ internal static class IptvEndpoints
 
         return Results.File(new UTF8Encoding(false).GetBytes(builder.ToString()), "application/xml; charset=\"UTF-8\"");
     }
+
+    /// <summary>
+    /// isHalfWidth を省いたときの既定。EPGStation は schema に default: true と書いているが、
+    /// 実際の応答は放送局名だけ半角で、番組名と説明は全角のまま返す。取り込む側は同じ値を
+    /// 見て突き合わせるので、この食い違いごと移植した。明示されたときは両方その値に従う。
+    /// </summary>
+    private const bool ChannelNameDefaultsToHalfWidth = true;
+
+    private const bool ProgramTextDefaultsToHalfWidth = false;
 
     /// <summary>
     /// EPGStation の replaceStr。実体参照を出さずに済むよう、XML で使えない文字を全角へ
