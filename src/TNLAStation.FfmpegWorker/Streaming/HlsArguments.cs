@@ -68,8 +68,9 @@ internal static class HlsArguments
         [
             "-hide_banner",
             "-loglevel", "warning",
-            "-fflags", "+discardcorrupt+nobuffer",
-            "-flags", "low_delay",
+            // nobuffer と low_delay は入力に付けてはいけない。放送の MPEG-2 は B フレームを持ち、
+            // 復号側の並べ替えを止めると表示順が崩れて映像がガクつく。
+            "-fflags", "+discardcorrupt",
             // 通常の HLS より短くして起動を早める。低遅延なのに待たされては意味がない。
             "-analyzeduration", "3M",
             "-probesize", "8M",
@@ -85,7 +86,8 @@ internal static class HlsArguments
             "-preset", "veryfast",
             "-tune", "zerolatency",
             "-profile:v", "main",
-            "-vf", $"yadif,scale=-2:{height.ToString(CultureInfo.InvariantCulture)}",
+            // 放送波は 1440x1080 の SAR 4:3。画素比を保ったまま出すと、SAR を見ない再生機 (fMP4 越しのブラウザー) が 4:3 で表示する。正方形画素に直して形で持たせる。
+            "-vf", $"yadif,scale=round({height.ToString(CultureInfo.InvariantCulture)}*dar/2)*2:{height.ToString(CultureInfo.InvariantCulture)},setsar=1",
             "-b:v", videoBitrate,
             "-maxrate", videoBitrate,
             // 1 秒ぶん。大きいほど画質は安定するが、その分だけ遅れる。
