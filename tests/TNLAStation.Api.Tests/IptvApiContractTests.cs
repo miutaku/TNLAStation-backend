@@ -28,19 +28,35 @@ public sealed class IptvApiContractTests : IDisposable
         string body = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("#EXTM3U", body, StringComparison.Ordinal);
         // 種データのチャンネルは serviceType: 1 (デジタルTVサービス) なので必ず出る。
-        Assert.Contains("NHK総合1・東京", body, StringComparison.Ordinal);
+        // 未指定は全角。EPGStation は schema に default: true と書きながら、実装では未指定を
+        // undefined のまま比較するため全角のまま返る。
+        Assert.Contains("ＮＨＫ総合１・東京", body, StringComparison.Ordinal);
         // 種データは hasLogoData: true なのでロゴ URL が付く。
         Assert.Contains("tvg-logo=", body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ChannelListUsesFullWidthNameWhenRequested()
+    public async Task ChannelListUsesHalfWidthNameWhenRequested()
     {
-        using HttpResponseMessage response = await client.GetAsync("/api/iptv/channel.m3u8?mode=0&isHalfWidth=false");
+        using HttpResponseMessage response = await client.GetAsync("/api/iptv/channel.m3u8?mode=0&isHalfWidth=true");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         string body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("ＮＨＫ総合１・東京", body, StringComparison.Ordinal);
+        Assert.Contains("NHK総合1・東京", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// PVR は m3u8 の名前と epg.xml の display-name を突き合わせることがある。既定が
+    /// 食い違うと、同じチャンネルが別物に見えて番組情報が付かない。
+    /// </summary>
+    [Fact]
+    public async Task TheChannelListAndTheEpgAgreeOnTheChannelNameByDefault()
+    {
+        string playlist = await (await client.GetAsync("/api/iptv/channel.m3u8?mode=0")).Content.ReadAsStringAsync();
+        string epg = await (await client.GetAsync("/api/iptv/epg.xml")).Content.ReadAsStringAsync();
+
+        Assert.Contains("ＮＨＫ総合１・東京", playlist, StringComparison.Ordinal);
+        Assert.Contains("<display-name lang=\"ja_JP\">ＮＨＫ総合１・東京</display-name>", epg, StringComparison.Ordinal);
     }
 
     [Fact]

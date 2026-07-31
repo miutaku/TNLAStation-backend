@@ -42,7 +42,9 @@ internal static class IptvEndpoints
         HttpContext context,
         IEpgRepository repository,
         [FromQuery] int mode,
-        [FromQuery] bool isHalfWidth = true,
+        // EPGStation は schema に default: true と書きながら、実装では未指定を undefined のまま
+        // 比較するため全角のまま返る (isHalfWidth === true が偽になる)。実装側に合わせる。
+        [FromQuery] bool isHalfWidth = false,
         CancellationToken cancellationToken = default)
     {
         IReadOnlyList<EpgChannel> channels = await repository.ListChannelsAsync(cancellationToken);
@@ -74,7 +76,7 @@ internal static class IptvEndpoints
         IEpgRepository repository,
         TimeProvider timeProvider,
         [FromQuery] int days = 3,
-        [FromQuery] bool isHalfWidth = true,
+        [FromQuery] bool isHalfWidth = false,
         CancellationToken cancellationToken = default)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
