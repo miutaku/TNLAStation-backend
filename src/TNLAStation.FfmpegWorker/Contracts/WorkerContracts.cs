@@ -17,7 +17,7 @@ public sealed record EncodeRequest(
     IReadOnlyDictionary<string, string>? EnvironmentVariables = null);
 
 /// <summary>chunked NDJSON で 1 行ずつ流れる進捗。最後の 1 行だけ Done が true になる。</summary>
-public sealed record EncodeProgress(bool Done, bool Succeeded, int? Percent, string? Log, bool Preempted = false);
+public sealed record EncodeProgress(bool Done, bool Succeeded, int? Percent, string? Log, string? Deferred = null);
 
 public sealed record HlsLiveStartRequest(
     long StreamId,

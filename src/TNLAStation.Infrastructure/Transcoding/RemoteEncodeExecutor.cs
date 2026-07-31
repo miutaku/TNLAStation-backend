@@ -50,9 +50,9 @@ public sealed class RemoteEncodeExecutor(HttpClient httpClient) : IEncodeExecuto
 
             if (progress.Done)
             {
-                if (progress.Preempted)
+                if (progress.Deferred is { Length: > 0 } reason)
                 {
-                    throw new EncodePreemptedException();
+                    throw new EncodeDeferredException(reason);
                 }
 
                 return progress.Succeeded;
@@ -72,5 +72,5 @@ public sealed class RemoteEncodeExecutor(HttpClient httpClient) : IEncodeExecuto
         double? RateTimeoutMultiplier,
         IReadOnlyDictionary<string, string> EnvironmentVariables);
 
-    private sealed record EncodeProgress(bool Done, bool Succeeded, int? Percent, string? Log, bool Preempted = false);
+    private sealed record EncodeProgress(bool Done, bool Succeeded, int? Percent, string? Log, string? Deferred = null);
 }

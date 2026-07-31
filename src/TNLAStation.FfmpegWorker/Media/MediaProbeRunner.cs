@@ -14,7 +14,12 @@ public sealed class MediaProbeRunner(IOptions<FfmpegOptions> options, ProcessGat
     public async ValueTask<double?> GetDurationSecondsAsync(string path, CancellationToken cancellationToken)
     {
         await using ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Background, cancellationToken);
+        return await ProbeAsync(path, cancellationToken);
+    }
 
+    /// <summary>枠を既に持っている呼び出し用。二重に取ると定員 1 の構成で自分と競合する。</summary>
+    public async ValueTask<double?> ProbeAsync(string path, CancellationToken cancellationToken)
+    {
         var startInfo = new ProcessStartInfo(options.FfprobePath)
         {
             RedirectStandardOutput = true,

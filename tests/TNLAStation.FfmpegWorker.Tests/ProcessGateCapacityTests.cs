@@ -77,6 +77,29 @@ public sealed class ProcessGateCapacityTests
         Assert.False(second.IsCompleted);
     }
 
+    /// <summary>
+    /// エンコードは枠を掴んだまま待たない。待つと待ち行列側では実行中に見えてしまう。
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireGivesUpImmediatelyWhenEverySlotIsTaken()
+    {
+        using ProcessGate gate = Create(new FfmpegOptions { EncodeProcessNum = 1 });
+        await using ProcessLease viewing = await gate.AcquireAsync(ProcessPriority.Viewing, CancellationToken.None);
+
+        Assert.Null(gate.TryAcquire(ProcessPriority.Background));
+    }
+
+    [Fact]
+    public void TryAcquireTakesAFreeSlot()
+    {
+        using ProcessGate gate = Create(new FfmpegOptions { EncodeProcessNum = 1 });
+
+        ProcessLease? lease = gate.TryAcquire(ProcessPriority.Background);
+
+        Assert.NotNull(lease);
+        Assert.Null(gate.TryAcquire(ProcessPriority.Background));
+    }
+
     [Fact]
     public async Task BackgroundWorkWaitsForARealSlotInsteadOfPreempting()
     {

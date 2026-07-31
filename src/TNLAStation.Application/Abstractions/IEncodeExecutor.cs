@@ -33,6 +33,6 @@ public interface IEncodeExecutor
 }
 
 /// <summary>
-/// 視聴に枠を譲るために止められた。失敗ではないので、待ち行列へ戻してやり直す。
+/// 今は走らせられない。失敗ではないので、待ち行列へ戻して枠が空いたらやり直す。
 /// </summary>
-public sealed class EncodePreemptedException() : Exception("The encode was stopped to make room for viewing.");
+public sealed class EncodeDeferredException(string reason) : Exception(reason);

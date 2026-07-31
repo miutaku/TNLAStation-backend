@@ -90,6 +90,25 @@ public sealed class ProcessGate : IDisposable
     }
 
     /// <summary>
+    /// 空きが無ければ待たずに null。掴んだまま待つと、待ち行列側では実行中に見えてしまう。
+    /// </summary>
+    public ProcessLease? TryAcquire(ProcessPriority priority)
+    {
+        if (!drainState.TryBeginWork())
+        {
+            throw new OperationCanceledException("The worker is draining.");
+        }
+
+        if (!semaphore.Wait(0, CancellationToken.None))
+        {
+            drainState.EndWork();
+            return null;
+        }
+
+        return Register(priority);
+    }
+
+    /// <summary>
     /// 新しく始めたものから止める。長く走っているエンコードほど、やり直しで捨てる時間が大きい。
     /// </summary>
     private void PreemptNewestBackground()

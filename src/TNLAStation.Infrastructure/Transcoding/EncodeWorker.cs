@@ -159,11 +159,11 @@ public sealed partial class EncodeWorker(
         {
             await RemoveClaimedTaskAsync(task.Id, claimId, CancellationToken.None);
         }
-        catch (EncodePreemptedException)
+        catch (EncodeDeferredException exception)
         {
-            // 視聴に枠を譲っただけ。待ち行列へ戻し、枠が空いたらまた掴む。
+            // 走らせられなかっただけ。待ち行列へ戻すので、画面には待機中として出る。
             await ReleaseClaimAsync(task.Id, claimId, CancellationToken.None);
-            LogEncodePreempted(logger, task.Id);
+            LogEncodeDeferred(logger, task.Id, exception.Message);
             return false;
         }
         catch
@@ -576,6 +576,6 @@ public sealed partial class EncodeWorker(
     [LoggerMessage(
         EventId = 5002,
         Level = LogLevel.Information,
-        Message = "Encode task {EncodeId} was stopped to make room for viewing; it goes back to the queue")]
-    private static partial void LogEncodePreempted(ILogger logger, long encodeId);
+        Message = "Encode task {EncodeId} goes back to the queue ({Reason})")]
+    private static partial void LogEncodeDeferred(ILogger logger, long encodeId, string reason);
 }

@@ -40,9 +40,11 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
         Func<int?, string?, CancellationToken, Task> onProgress,
         CancellationToken cancellationToken)
     {
-        double? totalSeconds = await probe.GetDurationSecondsAsync(input, cancellationToken);
+        // 枠を先に取る。掴めないまま probe で待つと、待ち行列側では実行中に見えてしまう。
+        await using ProcessLease lease = gate.TryAcquire(ProcessPriority.Background)
+            ?? throw new EncodeDeferredException("no free slot for an encode");
 
-        await using ProcessLease lease = await gate.AcquireAsync(ProcessPriority.Background, cancellationToken);
+        double? totalSeconds = await probe.ProbeAsync(input, cancellationToken);
 
         using var timeoutSource = new CancellationTokenSource();
         if (totalSeconds is { } durationSeconds and > 0 && rateTimeoutMultiplier is { } rate and > 0)
@@ -196,7 +198,7 @@ public sealed class EncodeRunner(MediaProbeRunner probe, IOptions<FfmpegOptions>
 
         if (preempted)
         {
-            throw new EncodePreemptedException();
+            throw new EncodeDeferredException("viewing took the slot");
         }
 
         if (failure is not null)
