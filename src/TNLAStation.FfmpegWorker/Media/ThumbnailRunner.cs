@@ -16,7 +16,7 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
 {
     private readonly FfmpegOptions options = options.Value;
 
-    public async Task<bool> ExtractAsync(
+    public async Task<(bool Success, string? Error)> ExtractAsync(
         string input,
         string output,
         int width,
@@ -62,7 +62,7 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
             string[] parts = ShellCommandLine.Split(Substitute(command, input, output, positionSeconds, thumbnailSize));
             if (parts.Length == 0)
             {
-                return false;
+                return (false, "the configured thumbnail command is empty");
             }
 
             startInfo.FileName = parts[0];
@@ -75,7 +75,7 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
         using Process? process = Process.Start(startInfo);
         if (process is null)
         {
-            return false;
+            return (false, "could not start the thumbnail process");
         }
 
         Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -104,7 +104,15 @@ public sealed class ThumbnailRunner(IOptions<FfmpegOptions> options, ProcessGate
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
 
-        return process.ExitCode == 0 && File.Exists(output);
+        string error = (await errorTask).Trim();
+        if (process.ExitCode != 0)
+        {
+            return (false, error.Length > 0 ? error : $"ffmpeg exited with {process.ExitCode.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        return File.Exists(output)
+            ? (true, null)
+            : (false, error.Length > 0 ? error : $"ffmpeg wrote nothing to {output}");
     }
 
     private string Substitute(string command, string input, string output, double positionSeconds, string thumbnailSize) => command

@@ -6,7 +6,8 @@ public sealed record ProbeResponse(double? DurationSeconds);
 
 public sealed record ThumbnailRequest(string InputPath, string OutputPath, int Width, int? Height, double PositionSeconds, string? Command = null);
 
-public sealed record ThumbnailResponse(bool Success);
+/// <summary>Error は ffmpeg の標準エラー。失敗の理由はここにしか出ない。</summary>
+public sealed record ThumbnailResponse(bool Success, string? Error = null);
 
 public sealed record EncodeRequest(
     string InputPath,

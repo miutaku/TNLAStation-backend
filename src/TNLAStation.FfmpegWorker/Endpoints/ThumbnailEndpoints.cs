@@ -9,7 +9,7 @@ public static class ThumbnailEndpoints
     {
         app.MapPost("/thumbnail", async (ThumbnailRequest request, ThumbnailRunner runner, CancellationToken cancellationToken) =>
         {
-            bool success = await runner.ExtractAsync(
+            (bool success, string? error) = await runner.ExtractAsync(
                 request.InputPath,
                 request.OutputPath,
                 request.Width,
@@ -17,7 +17,7 @@ public static class ThumbnailEndpoints
                 request.PositionSeconds,
                 request.Command,
                 cancellationToken);
-            return Results.Ok(new ThumbnailResponse(success));
+            return Results.Ok(new ThumbnailResponse(success, error));
         });
     }
 }

@@ -138,7 +138,7 @@ public sealed partial class RemoteThumbnailService(
             return true;
         }
 
-        LogThumbnailFailed(logger, input);
+        LogThumbnailFailed(logger, input, result?.Error ?? "the worker gave no reason");
         return false;
     }
 
@@ -161,11 +161,11 @@ public sealed partial class RemoteThumbnailService(
 
     private sealed record ThumbnailRequest(string InputPath, string OutputPath, int Width, int? Height, double PositionSeconds, string? Command);
 
-    private sealed record ThumbnailResponse(bool Success);
+    private sealed record ThumbnailResponse(bool Success, string? Error = null);
 
     [LoggerMessage(
         EventId = 6000,
         Level = LogLevel.Warning,
-        Message = "Could not take a thumbnail from {Path}")]
-    private static partial void LogThumbnailFailed(ILogger logger, string path);
+        Message = "Could not take a thumbnail from {Path}: {Reason}")]
+    private static partial void LogThumbnailFailed(ILogger logger, string path, string reason);
 }
