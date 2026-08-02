@@ -29,15 +29,16 @@ public interface IRecordedRepository
     ValueTask<long> AddAsync(CreateRecordedCommand command, CancellationToken cancellationToken);
 
     /// <summary>
-    /// 保護されていない録画のうち、行 id がいちばん小さいものの id。空き容量が足りないときに
-    /// 何を消すかを決めるためだけに使う。無ければ null。
+    /// 保護されておらず録画中でもない録画のうち、<paramref name="parentDirectoryPath"/> の下に
+    /// 実体があり、行 id がいちばん小さいものの id。空き容量が足りないときに何を消すかを
+    /// 決めるためだけに使う。無ければ null。
     ///
-    /// EPGStation の <c>RecordedDB.findOld()</c> をそのまま写している。保存先で絞らず (どの保存先が
-    /// 足りなくても全体から選ぶ)、録画中も除外しない。並びは <c>orderBy</c> を 2 回呼んでいて
-    /// TypeORM では後の呼び出しが前を置き換えるため、実際には <c>recorded.id ASC</c> だけが効く
-    /// — 開始時刻順ではなく登録順になる。
+    /// EPGStation の <c>RecordedDB.findOld()</c> は保存先で絞らず録画中も除外しないため、
+    /// 閾値割れした保存先とは別の場所の録画を消しても空きが増えず、消せるものが尽きるまで
+    /// 消し続けることがある。ここでは保存先で絞る。並びは EPGStation と同じく
+    /// <c>recorded.id ASC</c> (orderBy が後勝ちになるため、開始時刻順ではなく登録順)。
     /// </summary>
-    ValueTask<long?> FindOldestUnprotectedAsync(CancellationToken cancellationToken);
+    ValueTask<long?> FindOldestUnprotectedAsync(string parentDirectoryPath, CancellationToken cancellationToken);
 }
 
 public interface IReserveRepository

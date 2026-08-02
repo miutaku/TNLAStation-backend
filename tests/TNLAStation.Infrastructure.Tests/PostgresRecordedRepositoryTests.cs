@@ -1,6 +1,8 @@
+using Microsoft.EntityFrameworkCore;
 using TNLAStation.Application.Abstractions;
 using TNLAStation.Application.Models;
 using TNLAStation.Domain;
+using TNLAStation.Infrastructure.Persistence;
 using TNLAStation.Infrastructure.Repositories;
 
 namespace TNLAStation.Infrastructure.Tests;
@@ -113,12 +115,13 @@ public sealed class PostgresRecordedRepositoryTests
     }
 
     /// <summary>
-    /// 空き容量不足で消す候補の選び方。EPGStation の <c>RecordedDB.findOld()</c> は
-    /// 「保護されていない行のうち id がいちばん小さいもの」で、保存先でも録画中かどうかでも
-    /// 絞らない。<c>orderBy</c> を 2 回呼んでいて後勝ちになるため、開始時刻順ではなく登録順。
+    /// 空き容量不足で消す候補の選び方。保護されておらず録画中でもない録画のうち、閾値割れした
+    /// 保存先の下に実体があり、行 id がいちばん小さいもの (開始時刻順ではなく登録順 —
+    /// EPGStation の <c>findOld()</c> と同じ並び)。別の保存先の録画を消しても空きは増えない
+    /// ので、候補にしない。
     /// </summary>
     [PostgresFact]
-    public async Task TheStorageCleanupCandidateIsTheLowestUnprotectedRowId()
+    public async Task TheStorageCleanupCandidateIsTheLowestUnprotectedRowIdInTheDirectory()
     {
         await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
         await RecordingTestData.SeedEpgAsync(database);
@@ -127,16 +130,27 @@ public sealed class PostgresRecordedRepositoryTests
         // 先に入れたほうが id が小さい。開始時刻は逆順にしておく。
         long first = await AddRecordedAsync(repository, "後で始まる番組", startOffsetHours: 5);
         long second = await AddRecordedAsync(repository, "先に始まる番組", startOffsetHours: 0);
+        long elsewhere = await AddRecordedAsync(repository, "別の保存先の番組");
+        await AddVideoFileAsync(database, first, "/recorded");
+        await AddVideoFileAsync(database, second, "/recorded/sub");
+        // "/recorded2" は "/recorded" の下ではない。前方一致で拾わないことも確かめる。
+        await AddVideoFileAsync(database, elsewhere, "/recorded2");
 
-        // 開始時刻順なら second が選ばれるが、EPGStation は id 順なので first。
-        Assert.Equal(first, await repository.FindOldestUnprotectedAsync(CancellationToken.None));
+        // 開始時刻順なら second が選ばれるが、並びは id 順なので first。
+        Assert.Equal(first, await repository.FindOldestUnprotectedAsync("/recorded", CancellationToken.None));
+        Assert.Equal(elsewhere, await repository.FindOldestUnprotectedAsync("/recorded2", CancellationToken.None));
+
+        // 録画中は候補から外れる。
+        await SetRecordingAsync(database, first, isRecording: true);
+        Assert.Equal(second, await repository.FindOldestUnprotectedAsync("/recorded", CancellationToken.None));
+        await SetRecordingAsync(database, first, isRecording: false);
 
         // 保護すると候補から外れる。
         Assert.True(await repository.SetProtectedAsync(first, isProtected: true, CancellationToken.None));
-        Assert.Equal(second, await repository.FindOldestUnprotectedAsync(CancellationToken.None));
+        Assert.Equal(second, await repository.FindOldestUnprotectedAsync("/recorded", CancellationToken.None));
 
         Assert.True(await repository.SetProtectedAsync(second, isProtected: true, CancellationToken.None));
-        Assert.Null(await repository.FindOldestUnprotectedAsync(CancellationToken.None));
+        Assert.Null(await repository.FindOldestUnprotectedAsync("/recorded", CancellationToken.None));
     }
 
     private static async Task<(PostgresRecordedRepository Repository, long Id)> CreateRecordedAsync(
@@ -145,6 +159,33 @@ public sealed class PostgresRecordedRepositoryTests
         PostgresRecordedRepository repository = new(database.ContextFactory, RecordingTestData.Clock());
         long id = await AddRecordedAsync(repository, "録画済み番組");
         return (repository, id);
+    }
+
+    private static async Task AddVideoFileAsync(
+        PostgresTestDatabase database,
+        long recordedId,
+        string parentDirectory)
+    {
+        await using EpgDbContext context = await database.ContextFactory.CreateDbContextAsync();
+        context.VideoFiles.Add(new VideoFileEntity
+        {
+            RecordedId = recordedId,
+            Name = "TS",
+            Filename = $"{recordedId}.m2ts",
+            ParentDirectoryName = parentDirectory,
+            Type = "ts",
+            Size = 1,
+            CreatedAt = RecordingTestData.Now,
+        });
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task SetRecordingAsync(PostgresTestDatabase database, long recordedId, bool isRecording)
+    {
+        await using EpgDbContext context = await database.ContextFactory.CreateDbContextAsync();
+        RecordedEntity entity = await context.Recorded.SingleAsync(item => item.Id == recordedId);
+        entity.IsRecording = isRecording;
+        await context.SaveChangesAsync();
     }
 
     private static ValueTask<long> AddRecordedAsync(

@@ -120,6 +120,6 @@ public sealed class InMemoryRecordedRepository : IRecordedRepository
     }
 
     /// <summary>保存先を持たない構成なので、空き容量を気にする自動削除の出番も無い。</summary>
-    public ValueTask<long?> FindOldestUnprotectedAsync(CancellationToken cancellationToken) =>
+    public ValueTask<long?> FindOldestUnprotectedAsync(string parentDirectoryPath, CancellationToken cancellationToken) =>
         ValueTask.FromResult<long?>(null);
 }
