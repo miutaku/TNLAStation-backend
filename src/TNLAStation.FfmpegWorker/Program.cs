@@ -61,7 +61,9 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Postgr
     builder.Services.AddTnlaStationEncodeWorker(builder.Configuration);
 }
 
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<HlsSessionRegistry>();
+builder.Services.AddHostedService<UnobservedSessionReaper>();
 builder.Services.AddSingleton<TranscodeStreamer>();
 
 WebApplication app = builder.Build();

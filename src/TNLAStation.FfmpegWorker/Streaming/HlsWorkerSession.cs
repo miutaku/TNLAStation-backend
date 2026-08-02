@@ -20,6 +20,9 @@ internal sealed class HlsWorkerSession(long streamId, FfmpegOptions options, Str
 
     public bool IsRunning => ffmpeg is { HasExited: false };
 
+    /// <summary>backend が最後に状態を見に来た時刻。観測が途絶えたら自主的に畳む。</summary>
+    public DateTimeOffset LastObservedAt { get; set; }
+
     public void Start()
     {
         var startInfo = new ProcessStartInfo(command.FileName)

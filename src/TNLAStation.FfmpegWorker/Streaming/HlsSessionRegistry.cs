@@ -14,7 +14,8 @@ namespace TNLAStation.FfmpegWorker.Streaming;
 public sealed class HlsSessionRegistry(
     WorkerMirakurunClient mirakurun,
     IOptions<FfmpegOptions> options,
-    ProcessGate gate)
+    ProcessGate gate,
+    TimeProvider timeProvider)
 {
     private readonly ConcurrentDictionary<long, HlsWorkerSession> sessions = new();
     private readonly FfmpegOptions options = options.Value;
@@ -58,7 +59,10 @@ public sealed class HlsSessionRegistry(
         HlsWorkerSession? session = null;
         try
         {
-            session = new HlsWorkerSession(streamId, options, source, command, lease);
+            session = new HlsWorkerSession(streamId, options, source, command, lease)
+            {
+                LastObservedAt = timeProvider.GetUtcNow(),
+            };
             session.Start();
         }
         catch
@@ -91,7 +95,10 @@ public sealed class HlsSessionRegistry(
             ProcessCommand processCommand = command is null
                 ? new ProcessCommand(options.FfmpegPath, HlsArguments.CreateRecorded(options.WorkDirectory, streamId, height, videoBitrate, audioBitrate, segmentSeconds, path, playPosition))
                 : EpgStationStreamCommand.Expand(command, options, isTransportStream ? "pipe:0" : path, Playlist(streamId), streamId, playPosition, isTransportStream);
-            session = new HlsWorkerSession(streamId, options, source, processCommand, lease);
+            session = new HlsWorkerSession(streamId, options, source, processCommand, lease)
+            {
+                LastObservedAt = timeProvider.GetUtcNow(),
+            };
             session.Start();
         }
         catch
@@ -125,12 +132,41 @@ public sealed class HlsSessionRegistry(
             return (false, false, null, null);
         }
 
+        // backend が見に来た印。観測が途絶えたセッションは backend が忘れたものとして畳む。
+        session.LastObservedAt = timeProvider.GetUtcNow();
+
         bool running = session.IsRunning;
         return (
             true,
             running,
             running ? null : session.DescribeFailure("ffmpeg exited"),
             session.RecentOutput);
+    }
+
+    /// <summary>
+    /// backend から観測されなくなったセッションを畳み、畳んだ id を返す。backend の掃除
+    /// DELETE が失われても、ffmpeg がチューナーを掴んだまま残り続けないための保険。
+    /// </summary>
+    public async Task<IReadOnlyList<long>> StopUnobservedAsync(DateTimeOffset deadline)
+    {
+        List<long>? reaped = null;
+        foreach ((long streamId, HlsWorkerSession session) in sessions)
+        {
+            if (session.LastObservedAt >= deadline)
+            {
+                continue;
+            }
+
+            if (!sessions.TryRemove(streamId, out HlsWorkerSession? removed))
+            {
+                continue;
+            }
+
+            await removed.DisposeAsync();
+            (reaped ??= []).Add(streamId);
+        }
+
+        return reaped ?? [];
     }
 
     public async ValueTask<bool> StopAsync(long streamId)
