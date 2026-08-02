@@ -80,7 +80,7 @@ public sealed partial class StorageLimitHostedService(
         // 1 件消しては測り直す。まとめて消してから測ると、必要以上に消してしまうことがある。
         while (free <= thresholdBytes)
         {
-            long? id = await recorded.FindOldestUnprotectedAsync(cancellationToken);
+            long? id = await recorded.FindOldestUnprotectedAsync(directory.Path, cancellationToken);
             if (id is null)
             {
                 // 消せるものがもう無い。閾値を下回ったままでも、それ以上はできることがない。

@@ -144,12 +144,21 @@ internal static class StreamEndpoints
         CancellationToken cancellationToken)
     {
         await using Stream source = await streams.OpenLiveStreamAsync(channelId, mode, cancellationToken);
-        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+        await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
             new DirectStreamDescriptor("m2ts", mode, channelId, Client: DescribeClient(context)),
             cancellationToken);
         context.Response.ContentType = "video/mp2t";
         // 放送は終わらないので長さは書けない。書けば、そこで切れたと受け取られる。
-        await source.CopyToAsync(context.Response.Body, cancellationToken);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, tracked.StopToken);
+        try
+        {
+            await source.CopyToAsync(context.Response.Body, stop.Token);
+        }
+        catch (OperationCanceledException) when (tracked.StopToken.IsCancellationRequested)
+        {
+            // 停止 API から畳まれた。読み手には流れが終わったように見えるだけでいい。
+        }
+
         return Results.Empty;
     }
 
@@ -166,10 +175,10 @@ internal static class StreamEndpoints
             format,
             mode,
             cancellationToken);
-        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+        await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
             new DirectStreamDescriptor(format, mode, channelId, Client: DescribeClient(context)),
             cancellationToken);
-        return await WriteAsync(context, output, cancellationToken);
+        return await WriteAsync(context, output, tracked, cancellationToken);
     }
 
     private static async Task<IResult> GetRecordedTranscodedAsync(
@@ -187,10 +196,10 @@ internal static class StreamEndpoints
             mode,
             ss,
             cancellationToken);
-        await using IAsyncDisposable tracked = await streams.TrackDirectStreamAsync(
+        await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
             new DirectStreamDescriptor(format, mode, VideoFileId: videoFileId, Client: DescribeClient(context)),
             cancellationToken);
-        return await WriteAsync(context, output, cancellationToken);
+        return await WriteAsync(context, output, tracked, cancellationToken);
     }
 
     /// <summary>
@@ -212,12 +221,22 @@ internal static class StreamEndpoints
     private static async Task<IResult> WriteAsync(
         HttpContext context,
         TranscodedOutput output,
+        DirectStreamHandle tracked,
         CancellationToken cancellationToken)
     {
         await using Stream content = output.Content;
         context.Response.ContentType = output.ContentType;
         // 変換しながら出すので長さは書けない。書けば、そこで切れたと受け取られる。
-        await content.CopyToAsync(context.Response.Body, cancellationToken);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, tracked.StopToken);
+        try
+        {
+            await content.CopyToAsync(context.Response.Body, stop.Token);
+        }
+        catch (OperationCanceledException) when (tracked.StopToken.IsCancellationRequested)
+        {
+            // 停止 API から畳まれた。読み手には流れが終わったように見えるだけでいい。
+        }
+
         return Results.Empty;
     }
 

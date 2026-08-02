@@ -46,9 +46,7 @@ public sealed class PostgresVideoFileRepository(
             throw new InvalidOperationException("ParentDirectoryIsNotFound");
         }
 
-        string directory = string.IsNullOrWhiteSpace(upload.SubDirectory)
-            ? parent
-            : Path.Combine(parent, upload.SubDirectory);
+        string directory = ResolveSubDirectory(parent, upload.SubDirectory);
         Directory.CreateDirectory(directory);
 
         // 名前がぶつかると先にあったものを上書きしてしまう。
@@ -100,6 +98,32 @@ public sealed class PostgresVideoFileRepository(
         context.VideoFiles.Add(entity);
         await context.SaveChangesAsync(cancellationToken);
         return entity.Id;
+    }
+
+    /// <summary>
+    /// サブディレクトリは保存先の下だけを指せる。`..` や絶対パスを通すと、設定した場所の
+    /// 外へ書ける。
+    /// </summary>
+    private static string ResolveSubDirectory(string parent, string? subDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(subDirectory))
+        {
+            return parent;
+        }
+
+        if (Path.IsPathRooted(subDirectory))
+        {
+            throw new InvalidOperationException("SubDirectoryIsInvalid");
+        }
+
+        string root = Path.GetFullPath(parent);
+        string resolved = Path.GetFullPath(Path.Combine(root, subDirectory));
+        if (resolved != root && !resolved.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("SubDirectoryIsInvalid");
+        }
+
+        return resolved;
     }
 
     /// <summary>

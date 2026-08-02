@@ -183,7 +183,7 @@ public sealed class StorageLimitHostedServiceTests
 
         public int Lookups { get; private set; }
 
-        public ValueTask<long?> FindOldestUnprotectedAsync(CancellationToken cancellationToken)
+        public ValueTask<long?> FindOldestUnprotectedAsync(string parentDirectoryPath, CancellationToken cancellationToken)
         {
             Lookups++;
             return ValueTask.FromResult(oldestIds.Count > 0 ? oldestIds.Dequeue() : (long?)null);

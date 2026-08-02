@@ -66,9 +66,21 @@ public interface ILiveStreamService
     /// 1 本の流しっぱなしの配信を list へ載せる。 IPTV や外部の client からの
     /// 視聴も /api/streams に出さないと、誰が掴んでいるのか分からない。
     /// </summary>
-    ValueTask<IAsyncDisposable> TrackDirectStreamAsync(
+    ValueTask<DirectStreamHandle> TrackDirectStreamAsync(
         DirectStreamDescriptor descriptor,
         CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 直接配信 1 本の手綱。keep が届かない配信は reaper で畳めないので、停止 API から
+/// 止められるよう <see cref="StopToken"/> を配り込みへ結び付けてもらう。結び付けないと、
+/// 停止は list から外すだけの空振りになり、チューナーを掴んだまま見えなくなる。
+/// </summary>
+public sealed class DirectStreamHandle(IAsyncDisposable scope, CancellationToken stopToken) : IAsyncDisposable
+{
+    public CancellationToken StopToken { get; } = stopToken;
+
+    public ValueTask DisposeAsync() => scope.DisposeAsync();
 }
 
 /// <summary>

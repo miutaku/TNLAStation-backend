@@ -38,4 +38,11 @@ public sealed class FfmpegOptions
     /// 同時本数の上限はこの値で割って決まるので、下げすぎると全部が実時間に追いつかなくなる。
     /// </summary>
     public double StreamCpuCost { get; init; } = 1.2;
+
+    /// <summary>
+    /// backend から観測されない HLS セッションを自主的に畳むまでの秒数。backend は生きた
+    /// セッションを 10 秒ごとに見に来るので、これを大きく超えて観測が無いのは backend が
+    /// セッションを忘れた合図。backend の一時的な不調で誤って畳まないよう、余裕を持たせる。
+    /// </summary>
+    public int SessionUnobservedTimeoutSeconds { get; init; } = 120;
 }

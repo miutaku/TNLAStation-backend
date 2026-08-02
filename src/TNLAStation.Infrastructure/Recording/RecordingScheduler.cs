@@ -131,9 +131,24 @@ public sealed partial class RecordingScheduler(
             bool inWindow = now >= startAt.AddSeconds(-startMargin) &&
                 now < endAt.AddSeconds(endMargin);
             string reserveKey = GetReserveKey(reserve);
-            if (inWindow && !running.ContainsKey(reserveKey))
+            if (!inWindow || running.ContainsKey(reserveKey))
+            {
+                continue;
+            }
+
+            try
             {
                 await StartAsync(reserve, reserveKey, startAt, endAt, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                // 1 件の予約の失敗で残りの予約と終了掃除を巻き込まない。不良データが 1 件
+                // あるだけで、後続の録画が始まらず、終わった録画も終わらなくなる。
+                LogReserveStartFailed(logger, reserve.Id, reserve.Name, exception);
             }
         }
 
@@ -387,4 +402,14 @@ public sealed partial class RecordingScheduler(
         Level = LogLevel.Error,
         Message = "Could not acquire the recording lease or recover; retrying next cycle")]
     private static partial void LogSchedulerFailed(ILogger logger, Exception exception);
+
+    [LoggerMessage(
+        EventId = 4005,
+        Level = LogLevel.Error,
+        Message = "Could not start recording reserve {ReserveId} ({ProgramName}); the other reserves continue")]
+    private static partial void LogReserveStartFailed(
+        ILogger logger,
+        long reserveId,
+        string programName,
+        Exception exception);
 }

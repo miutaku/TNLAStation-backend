@@ -32,20 +32,26 @@ public sealed class PostgresRecordedRepository(
     /// <summary>
     /// 空き容量不足の削除対象を探す。EPGStation はディレクトリを問わず全体で最古のものを
     /// 消すため、閾値割れした保存先とは別の場所にある録画を消しても空きが増えないことがある。
-    /// ここでは意図的に <paramref name="parentDirectoryName"/> に絞って、確実にその保存先の
+    /// ここでは意図的に <paramref name="parentDirectoryPath"/> に絞って、確実にその保存先の
     /// 空きが増える録画だけを対象にする。録画中のものも対象から外す (EPGStation は外していない)。
     /// </summary>
-    public async ValueTask<long?> FindOldestUnprotectedAsync(CancellationToken cancellationToken)
+    public async ValueTask<long?> FindOldestUnprotectedAsync(string parentDirectoryPath, CancellationToken cancellationToken)
     {
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
 
-        // EPGStation (RecordedDB.findOld) は保護状態だけで絞る。保存先も録画中かどうかも見ない。
         // 並びは id 昇順 (EPGStation の 2 度目の orderBy が startAt の指定を上書きするため)。
+        string root = Path.GetFullPath(parentDirectoryPath);
+        string prefix = root + Path.DirectorySeparatorChar;
+        // StartsWith は SQL の前方一致に翻訳される式で、StringComparison 付きは翻訳できない。
+#pragma warning disable CA1310
         return await context.Recorded.AsNoTracking()
-            .Where(item => !item.IsProtected)
+            .Where(item => !item.IsProtected && !item.IsRecording)
+            .Where(item => item.VideoFiles.Any(file =>
+                file.ParentDirectoryName == root || file.ParentDirectoryName.StartsWith(prefix)))
             .OrderBy(item => item.Id)
             .Select(item => (long?)item.Id)
             .FirstOrDefaultAsync(cancellationToken);
+#pragma warning restore CA1310
     }
 
     public async ValueTask<long> AddAsync(CreateRecordedCommand command, CancellationToken cancellationToken)
