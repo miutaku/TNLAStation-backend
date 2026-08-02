@@ -24,6 +24,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly ConcurrentDictionary<long, SessionRecord> sessions = new();
+
+    /// <summary>
+    /// worker への掃除 DELETE が失敗したセッション。帳簿から消した後に放置すると、ffmpeg が
+    /// チューナーを掴んだまま、どの一覧にも出ない孤児になる。成功するまで reaper が再試行する。
+    /// </summary>
+    private readonly ConcurrentDictionary<long, SessionRecord> pendingCleanups = new();
     private readonly object reaperGate = new();
     private readonly SemaphoreSlim startGate = new(1, 1);
     private readonly HttpClient worker;
@@ -65,6 +71,11 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         this.mirakurunOptions = mirakurunOptions.Value;
         this.timeProvider = timeProvider;
         this.logger = logger;
+
+        // id は再起動で 0 に戻る単純なカウンタにしない。worker のセッションは backend より
+        // 長生きすることがあり、再起動後の採番が生き残りと衝突すると新規視聴が始められない。
+        // 秒単位なら採番が時計を追い越すこともない (1 秒に 1 本以上を上回り続けない限り)。
+        lastStreamId = timeProvider.GetUtcNow().ToUnixTimeSeconds();
         reaper = timeProvider.CreateTimer(
             _ => QueueReap(),
             state: null,
@@ -264,19 +275,59 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             return false;
         }
 
+        if (session.DirectLifetime is { } lifetime)
+        {
+            // 直接配信は worker を介さない。読み手への流し込みを打ち切って畳む。
+            lifetime.Cancel();
+            LogStreamStopped(logger, streamId, "requested");
+            return true;
+        }
+
+        await CleanupWorkerSessionAsync(session);
+        LogStreamStopped(logger, streamId, "requested");
+        return true;
+    }
+
+    /// <summary>
+    /// worker 側の ffmpeg を畳む。失敗したら成功するまで reaper が再試行する。ここで諦めると、
+    /// どの一覧にも出ない ffmpeg がチューナーと帯域を掴んだまま残る。
+    /// </summary>
+    private async Task CleanupWorkerSessionAsync(SessionRecord session)
+    {
+        if (await TryDeleteWorkerSessionAsync(session))
+        {
+            pendingCleanups.TryRemove(session.StreamId, out _);
+            return;
+        }
+
+        pendingCleanups[session.StreamId] = session;
+    }
+
+    private async Task<bool> TryDeleteWorkerSessionAsync(SessionRecord session)
+    {
         try
         {
             using HttpResponseMessage response = await worker.DeleteAsync(
-                ResolveWorkerRequestUri(session, $"streams/hls/{streamId}"),
+                ResolveWorkerRequestUri(session, $"streams/hls/{session.StreamId}"),
                 CancellationToken.None);
+
+            // 404 は「もう無い」。それも掃除の完了として扱う。
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return true;
+            }
+
+            LogStreamCleanupFailed(
+                logger,
+                session.StreamId,
+                new HttpRequestException($"The worker answered {(int)response.StatusCode} to the cleanup request."));
         }
-        catch (HttpRequestException exception)
+        catch (Exception exception)
         {
-            LogStreamCleanupFailed(logger, streamId, exception);
+            LogStreamCleanupFailed(logger, session.StreamId, exception);
         }
 
-        LogStreamStopped(logger, streamId, "requested");
-        return true;
+        return false;
     }
 
     /// <summary>
@@ -427,11 +478,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     /// 流しっぱなしの配信を list へ載せる。keep は届かないので、収集対象から外す
     /// (畳まれるまで生き続ける)。
     /// </summary>
-    public ValueTask<IAsyncDisposable> TrackDirectStreamAsync(
+    public ValueTask<DirectStreamHandle> TrackDirectStreamAsync(
         DirectStreamDescriptor descriptor,
         CancellationToken cancellationToken)
     {
         long streamId = Interlocked.Increment(ref lastStreamId);
+        var lifetime = new CancellationTokenSource();
         var record = new SessionRecord(
             streamId,
             descriptor.ChannelId,
@@ -441,11 +493,13 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             timeProvider.GetUtcNow())
         {
             DirectType = descriptor.Type,
+            DirectLifetime = lifetime,
             Client = descriptor.Client,
         };
         sessions[streamId] = record;
         LogStreamStarted(logger, streamId, descriptor.Client ?? descriptor.Type, descriptor.Type);
-        return ValueTask.FromResult<IAsyncDisposable>(new DirectStreamScope(this, streamId));
+        return ValueTask.FromResult(
+            new DirectStreamHandle(new DirectStreamScope(this, streamId, lifetime), lifetime.Token));
     }
 
     private void ForgetDirectStream(long streamId)
@@ -457,7 +511,10 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     }
 
     /// <summary>読み手が閉じたら list から外す。掴んだままにすると視聴中が残り続ける。</summary>
-    private sealed class DirectStreamScope(RemoteLiveStreamService owner, long streamId) : IAsyncDisposable
+    private sealed class DirectStreamScope(
+        RemoteLiveStreamService owner,
+        long streamId,
+        CancellationTokenSource lifetime) : IAsyncDisposable
     {
         private int disposed;
 
@@ -466,6 +523,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             if (Interlocked.Exchange(ref disposed, 1) == 0)
             {
                 owner.ForgetDirectStream(streamId);
+                lifetime.Dispose();
             }
 
             return ValueTask.CompletedTask;
@@ -678,6 +736,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
 
     private async Task ReapIdleSessionsAsync()
     {
+        // 前回までに掃除し損ねた ffmpeg を先に畳み直す。放置すると永続的な孤児になる。
+        foreach (SessionRecord failed in pendingCleanups.Values)
+        {
+            await CleanupWorkerSessionAsync(failed);
+        }
+
         DateTimeOffset deadline = timeProvider.GetUtcNow().AddSeconds(-Math.Max(5, options.IdleTimeoutSeconds));
         foreach (SessionRecord session in sessions.Values)
         {
@@ -699,16 +763,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             if (sessions.TryRemove(session.StreamId, out _))
             {
                 LogStreamStopped(logger, session.StreamId, expired ? "idle" : "ffmpeg exited");
-                try
-                {
-                    using HttpResponseMessage response = await worker.DeleteAsync(
-                        ResolveWorkerRequestUri(session, $"streams/hls/{session.StreamId}"),
-                        CancellationToken.None);
-                }
-                catch (Exception exception)
-                {
-                    LogStreamCleanupFailed(logger, session.StreamId, exception);
-                }
+                await CleanupWorkerSessionAsync(session);
             }
         }
     }
@@ -799,6 +854,9 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
 
         /// <summary>ffmpeg-worker を介さない配信の種別。null なら HLS のセッション。</summary>
         public string? DirectType { get; set; }
+
+        /// <summary>直接配信の手綱。引くと送出側が流し込みを打ち切る。</summary>
+        public CancellationTokenSource? DirectLifetime { get; set; }
 
         public string? Client { get; set; }
     }

@@ -21,7 +21,7 @@ public sealed class DirectStreamTrackingTests
     {
         await using RemoteLiveStreamService service = Create();
 
-        IAsyncDisposable tracked = await service.TrackDirectStreamAsync(
+        DirectStreamHandle tracked = await service.TrackDirectStreamAsync(
             new DirectStreamDescriptor("m2ts", 0, ChannelId: 3273601024, Client: "192.168.20.9 (PVR Live)"),
             CancellationToken.None);
 
@@ -42,7 +42,7 @@ public sealed class DirectStreamTrackingTests
     {
         await using RemoteLiveStreamService service = Create();
 
-        await using IAsyncDisposable tracked = await service.TrackDirectStreamAsync(
+        await using DirectStreamHandle tracked = await service.TrackDirectStreamAsync(
             new DirectStreamDescriptor("mp4", 1, VideoFileId: 42, Client: "10.0.0.2"),
             CancellationToken.None);
 
@@ -52,14 +52,32 @@ public sealed class DirectStreamTrackingTests
         Assert.Equal(1, session.Mode);
     }
 
+    /// <summary>
+    /// 停止 API は list から外すだけでなく、送出側の流し込みも打ち切る。外すだけだと、
+    /// チューナーを掴んだ配信がどの一覧からも見えなくなる。
+    /// </summary>
+    [Fact]
+    public async Task StoppingADirectStreamCancelsItsStopToken()
+    {
+        await using RemoteLiveStreamService service = Create();
+        await using DirectStreamHandle tracked = await service.TrackDirectStreamAsync(
+            new DirectStreamDescriptor("m2ts", 0, ChannelId: 1), CancellationToken.None);
+        StreamSession session = Assert.Single(await service.ListAsync(CancellationToken.None));
+
+        Assert.True(await service.StopAsync(session.StreamId));
+
+        Assert.True(tracked.StopToken.IsCancellationRequested);
+        Assert.Empty(await service.ListAsync(CancellationToken.None));
+    }
+
     /// <summary>畳み忘れの二重呼び出しで、他のセッションを巻き添えにしない。</summary>
     [Fact]
     public async Task ClosingTwiceRemovesOnlyItsOwnEntry()
     {
         await using RemoteLiveStreamService service = Create();
-        IAsyncDisposable first = await service.TrackDirectStreamAsync(
+        DirectStreamHandle first = await service.TrackDirectStreamAsync(
             new DirectStreamDescriptor("m2ts", 0, ChannelId: 1), CancellationToken.None);
-        await using IAsyncDisposable second = await service.TrackDirectStreamAsync(
+        await using DirectStreamHandle second = await service.TrackDirectStreamAsync(
             new DirectStreamDescriptor("m2ts", 0, ChannelId: 2), CancellationToken.None);
 
         await first.DisposeAsync();
