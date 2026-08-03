@@ -7,24 +7,35 @@ namespace TNLAStation.Infrastructure.Repositories;
 public sealed class InMemoryReserveRepository : IReserveRepository
 {
     private readonly object gate = new();
-    private readonly List<Reservation> reserves =
-    [
-        new Reservation(
-            Id: 1,
-            IsSkip: false,
-            IsConflict: false,
-            IsOverlap: false,
-            AllowEndLack: false,
-            IsTimeSpecified: true,
-            IsDeleteOriginalAfterEncode: false,
-            ChannelId: 1,
-            StartAt: 1_735_696_800_000,
-            EndAt: 1_735_698_600_000,
-            Name: "モック予約番組",
-            HalfWidthName: "モック予約番組",
-            RawExtended: new Dictionary<string, string> { ["補足"] = "固定データ" })
-    ];
+    private readonly TimeProvider timeProvider;
+    private readonly List<Reservation> reserves;
     private long nextId = 1;
+
+    public InMemoryReserveRepository(TimeProvider timeProvider)
+    {
+        this.timeProvider = timeProvider;
+
+        // 固定の過去日時だと、実行するたびに経過時間で終了済みになり ListAsync から消えてしまう。
+        // 常に「これから」に見えるよう、起動時刻からの相対時刻でモックする。
+        DateTimeOffset mockStart = timeProvider.GetUtcNow().AddHours(1);
+        reserves =
+        [
+            new Reservation(
+                Id: 1,
+                IsSkip: false,
+                IsConflict: false,
+                IsOverlap: false,
+                AllowEndLack: false,
+                IsTimeSpecified: true,
+                IsDeleteOriginalAfterEncode: false,
+                ChannelId: 1,
+                StartAt: mockStart.ToUnixTimeMilliseconds(),
+                EndAt: mockStart.AddMinutes(30).ToUnixTimeMilliseconds(),
+                Name: "モック予約番組",
+                HalfWidthName: "モック予約番組",
+                RawExtended: new Dictionary<string, string> { ["補足"] = "固定データ" })
+        ];
+    }
 
     public ValueTask<Page<Reservation>> ListAsync(ReserveQuery query, CancellationToken cancellationToken)
     {
@@ -32,7 +43,10 @@ public sealed class InMemoryReserveRepository : IReserveRepository
 
         lock (gate)
         {
-            IEnumerable<Reservation> result = reserves;
+            // EPGStation は録画が終わった予約を Recorded へ移して Reserve からは消す。この実装はまだ
+            // 録画完了時にその移動をしないので、代わりに読むときに終了済みを外して同じ見た目にする。
+            long nowMs = timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+            IEnumerable<Reservation> result = reserves.Where(item => item.EndAt > nowMs);
 
             result = query.Type switch
             {
@@ -96,7 +110,7 @@ public sealed class InMemoryReserveRepository : IReserveRepository
 
             if (command.TimeSpecified is { } specifiedCheck)
             {
-                if (specifiedCheck.EndAt <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
+                if (specifiedCheck.EndAt <= timeProvider.GetUtcNow().ToUnixTimeMilliseconds())
                 {
                     throw new InvalidOperationException("TimeSpecifiedOptionError");
                 }

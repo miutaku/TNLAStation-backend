@@ -22,7 +22,13 @@ public sealed class PostgresReserveRepository(
         ArgumentNullException.ThrowIfNull(query);
 
         await using EpgDbContext context = await contextFactory.CreateDbContextAsync(cancellationToken);
-        IQueryable<ReserveEntity> reserves = ApplyType(context.Reserves.AsNoTracking(), query.Type);
+
+        // EPGStation は録画が終わった予約を Recorded へ移して Reserve からは消す。この実装はまだ
+        // 録画完了時にその移動をしないので、代わりに読むときに終了済みを外して同じ見た目にする。
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        IQueryable<ReserveEntity> reserves = ApplyType(
+            context.Reserves.AsNoTracking().Where(reserve => reserve.EndAt > now),
+            query.Type);
         if (query.RuleId == 0)
         {
             reserves = reserves.Where(reserve => reserve.RuleId == null);

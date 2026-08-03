@@ -242,6 +242,45 @@ public sealed class PostgresReserveRepositoryTests
         Assert.Equal(2, (await repository.ListAsync(new ReserveQuery(false), CancellationToken.None)).Total);
     }
 
+    /// <summary>
+    /// EPGStation は録画が終わった予約を Recorded へ移して Reserve から消す。この実装はまだその
+    /// 移動をしないので、一覧が読むときに終了済みを外すことで見た目を揃えている。
+    /// </summary>
+    [PostgresFact]
+    public async Task ListExcludesReservesThatHaveAlreadyEnded()
+    {
+        await using PostgresTestDatabase database = await PostgresTestDatabase.CreateAsync();
+        await RecordingTestData.SeedEpgAsync(database);
+        PostgresReserveRepository repository = Create(database);
+
+        var ended = new ReserveTarget(
+            ReserveSource.Rule,
+            RecordingTestData.ChannelId,
+            "GR",
+            RecordingTestData.Now.AddHours(-3),
+            RecordingTestData.Now.AddHours(-2),
+            "終わった番組",
+            ProgramId: 101,
+            RuleId: 5);
+        var upcoming = new ReserveTarget(
+            ReserveSource.Rule,
+            RecordingTestData.ChannelId,
+            "GR",
+            RecordingTestData.Now.AddHours(1),
+            RecordingTestData.Now.AddHours(2),
+            "これからの番組",
+            ProgramId: 102,
+            RuleId: 5);
+        await repository.ReplaceAsync(
+            [new ReserveAssignment(ended, TunerIndex: null), new ReserveAssignment(upcoming, TunerIndex: 0)],
+            RecordingTestData.Now,
+            CancellationToken.None);
+
+        Reservation remaining = Assert.Single(
+            (await repository.ListAsync(new ReserveQuery(false), CancellationToken.None)).Items);
+        Assert.Equal("これからの番組", remaining.Name);
+    }
+
     [PostgresFact]
     public async Task ListSearchesProgramDetailsAndStructuredFields()
     {
