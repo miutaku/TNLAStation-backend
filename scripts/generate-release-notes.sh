@@ -30,17 +30,17 @@ generated_notes="$(
 )"
 
 {
-  if ! grep -q '^## What'\''s Changed$' <<<"$generated_notes"; then
-    echo "## What's Changed"
-    git log "$range" --format='- %s (`%h`)'
-    echo
-  fi
+  echo "## What's Changed"
+  git log "$range" --format='- %s (`%h`)'
+  echo
 
-  printf '%s\n' "$generated_notes"
-
-  if ! grep -q '^## New Contributors$' <<<"$generated_notes"; then
-    echo
+  if grep -q '^## New Contributors$' <<<"$generated_notes"; then
+    sed -n '/^## New Contributors$/,$p' <<<"$generated_notes"
+  else
     echo "## New Contributors"
     echo "- No new contributors in this release."
   fi
+
+  echo
+  grep '^\*\*Full Changelog\*\*' <<<"$generated_notes" || true
 } >"$output"
