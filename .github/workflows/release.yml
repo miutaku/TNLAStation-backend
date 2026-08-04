@@ -54,13 +54,13 @@ jobs:
           sparse-checkout: scripts/generate-release-notes.sh
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile
           ignore: DL3008
 
       - name: Lint Dockerfile.ffmpeg-worker
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: Dockerfile.ffmpeg-worker
           ignore: DL3008
