@@ -466,10 +466,12 @@ public sealed class PostgresReserveRepository(
         Dictionary<long, ManualReserveEntity> manuals = await context.ManualReserves.AsNoTracking()
             .Where(manual => manualIds.Contains(manual.Id))
             .ToDictionaryAsync(manual => manual.Id, cancellationToken);
-        var ruleNames = await context.Rules.AsNoTracking()
+        RuleEntity[] ruleEntities = await context.Rules.AsNoTracking()
             .Where(rule => ruleIds.Contains(rule.Id))
-            .Select(rule => new { rule.Id, rule.DisplayName })
-            .ToDictionaryAsync(rule => rule.Id, cancellationToken);
+            .ToArrayAsync(cancellationToken);
+        Dictionary<long, RecordingRule> rules = ruleEntities.ToDictionary(
+            rule => rule.Id,
+            rule => rule.ToDomain());
         string[] reserveKeys = [.. reserves.Select(reserve => reserve.Key)];
         ReserveStateEntity[] editedStates = await context.ReserveStates.AsNoTracking()
             .Where(state => reserveKeys.Contains(state.Key) && state.EditJson != null)
@@ -487,13 +489,8 @@ public sealed class PostgresReserveRepository(
                 ? manual
                 : null,
             edits.GetValueOrDefault(reserve.Key),
-            reserve.RuleId is { } ruleId && ruleNames.TryGetValue(ruleId, out var ruleName)
-                ? NormalizeRuleName(ruleName.DisplayName)
+            reserve.RuleId is { } ruleId && rules.TryGetValue(ruleId, out RecordingRule? rule)
+                ? rule
                 : null))];
     }
-
-    private static string NormalizeRuleName(string? displayName) =>
-        !string.IsNullOrWhiteSpace(displayName)
-            ? displayName.Trim()
-            : "無題のルール";
 }
