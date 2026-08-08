@@ -351,7 +351,14 @@ public sealed class PostgresReserveRepositoryTests
         long unnamedRuleId;
         await using (EpgDbContext context = await database.ContextFactory.CreateDbContextAsync())
         {
-            var namedRule = new RuleEntity { DisplayName = " 週末ドラマ " };
+            var namedRule = new RuleEntity
+            {
+                DisplayName = " 週末ドラマ ",
+                Mode1 = "H.264",
+                ParentDirectoryName1 = "encoded",
+                Directory1 = "before",
+                IsDeleteOriginalAfterEncode = false,
+            };
             var unnamedRule = new RuleEntity { Keyword = " アニメ " };
             context.Rules.AddRange(namedRule, unnamedRule);
             await context.SaveChangesAsync();
@@ -369,8 +376,31 @@ public sealed class PostgresReserveRepositoryTests
             CancellationToken.None);
 
         Page<Reservation> page = await repository.ListAsync(new ReserveQuery(false), CancellationToken.None);
-        Assert.Equal("週末ドラマ", page.Items.Single(item => item.RuleId == namedRuleId).RuleName);
+        Reservation namedReserve = page.Items.Single(item => item.RuleId == namedRuleId);
+        Assert.Equal("週末ドラマ", namedReserve.RuleName);
+        Assert.Equal("H.264", namedReserve.EncodeMode1);
+        Assert.Equal("encoded", namedReserve.EncodeParentDirectoryName1);
+        Assert.Equal("before", namedReserve.EncodeDirectory1);
+        Assert.False(namedReserve.IsDeleteOriginalAfterEncode);
         Assert.Equal("無題のルール", page.Items.Single(item => item.RuleId == unnamedRuleId).RuleName);
+
+        await using (EpgDbContext context = await database.ContextFactory.CreateDbContextAsync())
+        {
+            RuleEntity namedRule = await context.Rules.FindAsync(namedRuleId)
+                ?? throw new InvalidOperationException("Seeded rule was not found.");
+            namedRule.Mode1 = "H.265";
+            namedRule.ParentDirectoryName1 = "archive";
+            namedRule.Directory1 = "after";
+            namedRule.IsDeleteOriginalAfterEncode = true;
+            await context.SaveChangesAsync();
+        }
+
+        page = await repository.ListAsync(new ReserveQuery(false), CancellationToken.None);
+        namedReserve = page.Items.Single(item => item.RuleId == namedRuleId);
+        Assert.Equal("H.265", namedReserve.EncodeMode1);
+        Assert.Equal("archive", namedReserve.EncodeParentDirectoryName1);
+        Assert.Equal("after", namedReserve.EncodeDirectory1);
+        Assert.True(namedReserve.IsDeleteOriginalAfterEncode);
 
         await using (EpgDbContext context = await database.ContextFactory.CreateDbContextAsync())
         {

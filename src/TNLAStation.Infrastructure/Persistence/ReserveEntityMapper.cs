@@ -17,16 +17,18 @@ internal static class ReserveEntityMapper
         EpgProgramEntity? program,
         ManualReserveEntity? manual,
         CreateReserveCommand? edit,
-        string? ruleName = null) =>
+        RecordingRule? rule = null) =>
         new(
             entity.Id,
             entity.IsSkip,
             entity.IsConflict,
             entity.IsOverlap,
-            AllowEndLack: edit?.AllowEndLack ?? manual?.AllowEndLack ?? true,
+            AllowEndLack: edit?.AllowEndLack ?? manual?.AllowEndLack ??
+                rule?.ReserveOption.AllowEndLack ?? true,
             IsTimeSpecified: manual?.IsTimeSpecified ?? false,
             IsDeleteOriginalAfterEncode: edit?.Encode?.IsDeleteOriginalAfterEncode ??
-                manual?.IsDeleteOriginalAfterEncode ?? false,
+                manual?.IsDeleteOriginalAfterEncode ??
+                rule?.EncodeOption?.IsDeleteOriginalAfterEncode ?? false,
             entity.ChannelId,
             entity.StartAt.ToUnixTimeMilliseconds(),
             entity.EndAt.ToUnixTimeMilliseconds(),
@@ -34,19 +36,23 @@ internal static class ReserveEntityMapper
             program?.HalfWidthName ?? entity.HalfWidthName,
             RuleId: entity.RuleId,
             Priority: entity.Priority,
-            Tags: edit?.Tags ?? DeserializeTags(manual?.TagsJson),
-            ParentDirectoryName: edit?.Save?.ParentDirectoryName ?? manual?.ParentDirectoryName,
-            Directory: edit?.Save?.Directory ?? manual?.Directory,
-            RecordedFormat: edit?.Save?.RecordedFormat ?? manual?.RecordedFormat,
-            EncodeMode1: edit?.Encode?.Mode1 ?? manual?.Mode1,
-            EncodeParentDirectoryName1: edit?.Encode?.EncodeParentDirectoryName1 ?? manual?.ParentDirectoryName1,
-            EncodeDirectory1: edit?.Encode?.Directory1 ?? manual?.Directory1,
-            EncodeMode2: edit?.Encode?.Mode2 ?? manual?.Mode2,
-            EncodeParentDirectoryName2: edit?.Encode?.EncodeParentDirectoryName2 ?? manual?.ParentDirectoryName2,
-            EncodeDirectory2: edit?.Encode?.Directory2 ?? manual?.Directory2,
-            EncodeMode3: edit?.Encode?.Mode3 ?? manual?.Mode3,
-            EncodeParentDirectoryName3: edit?.Encode?.EncodeParentDirectoryName3 ?? manual?.ParentDirectoryName3,
-            EncodeDirectory3: edit?.Encode?.Directory3 ?? manual?.Directory3,
+            Tags: edit?.Tags ?? DeserializeTags(manual?.TagsJson) ?? rule?.ReserveOption.Tags,
+            ParentDirectoryName: edit?.Save?.ParentDirectoryName ?? manual?.ParentDirectoryName ??
+                rule?.SaveOption?.ParentDirectoryName,
+            Directory: edit?.Save?.Directory ?? manual?.Directory ?? rule?.SaveOption?.Directory,
+            RecordedFormat: edit?.Save?.RecordedFormat ?? manual?.RecordedFormat ?? rule?.SaveOption?.RecordedFormat,
+            EncodeMode1: edit?.Encode?.Mode1 ?? manual?.Mode1 ?? rule?.EncodeOption?.Mode1,
+            EncodeParentDirectoryName1: edit?.Encode?.EncodeParentDirectoryName1 ?? manual?.ParentDirectoryName1 ??
+                rule?.EncodeOption?.EncodeParentDirectoryName1,
+            EncodeDirectory1: edit?.Encode?.Directory1 ?? manual?.Directory1 ?? rule?.EncodeOption?.Directory1,
+            EncodeMode2: edit?.Encode?.Mode2 ?? manual?.Mode2 ?? rule?.EncodeOption?.Mode2,
+            EncodeParentDirectoryName2: edit?.Encode?.EncodeParentDirectoryName2 ?? manual?.ParentDirectoryName2 ??
+                rule?.EncodeOption?.EncodeParentDirectoryName2,
+            EncodeDirectory2: edit?.Encode?.Directory2 ?? manual?.Directory2 ?? rule?.EncodeOption?.Directory2,
+            EncodeMode3: edit?.Encode?.Mode3 ?? manual?.Mode3 ?? rule?.EncodeOption?.Mode3,
+            EncodeParentDirectoryName3: edit?.Encode?.EncodeParentDirectoryName3 ?? manual?.ParentDirectoryName3 ??
+                rule?.EncodeOption?.EncodeParentDirectoryName3,
+            EncodeDirectory3: edit?.Encode?.Directory3 ?? manual?.Directory3 ?? rule?.EncodeOption?.Directory3,
             ProgramId: entity.ProgramId,
             Description: program?.Description,
             HalfWidthDescription: program?.HalfWidthDescription,
@@ -68,10 +74,15 @@ internal static class ReserveEntityMapper
             AudioComponentType: program?.AudioComponentType,
             ReserveKey: entity.Key,
             ManualReserveId: entity.ManualReserveId,
-            RuleName: ruleName);
+            RuleName: rule is null ? null : NormalizeRuleName(rule.Name));
 
     private static long[]? DeserializeTags(string? json) =>
         string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<long[]>(json, JsonOptions);
+
+    private static string NormalizeRuleName(string? displayName) =>
+        !string.IsNullOrWhiteSpace(displayName)
+            ? displayName.Trim()
+            : "無題のルール";
 
     private static Dictionary<string, string>? DeserializeDictionary(string? json) =>
         string.IsNullOrWhiteSpace(json)
