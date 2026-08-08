@@ -145,7 +145,7 @@ public sealed class RuleReserveOptionRequest
 
 internal static class RuleContractMapper
 {
-    public static RuleResponse ToResponse(this RecordingRule rule, bool includeReservesCount)
+    public static RuleResponse ToResponse(this RecordingRule rule, int? reservesCount = null)
     {
         EpgSearchQuery search = rule.SearchOption;
         return new RuleResponse(
@@ -210,9 +210,7 @@ internal static class RuleContractMapper
                     EncodeParentDirectoryName3 = rule.EncodeOption.EncodeParentDirectoryName3,
                     Directory3 = rule.EncodeOption.Directory3
                 },
-            // Without a reserve store the count is always zero, which is what EPGStation reports
-            // for a rule that has produced no reserves.
-            ReservesCnt = includeReservesCount ? 0 : null,
+            ReservesCnt = reservesCount,
             Name = rule.Name
         };
     }

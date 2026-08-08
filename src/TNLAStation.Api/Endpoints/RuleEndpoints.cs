@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using TNLAStation.Api.Contracts;
 using TNLAStation.Application.Abstractions;
 using TNLAStation.Application.Models;
+using TNLAStation.Domain;
 using TNLAStation.Infrastructure.Configuration;
 
 namespace TNLAStation.Api.Endpoints;
@@ -78,6 +79,7 @@ internal static class RuleEndpoints
 
     private static async Task<IResult> GetRulesAsync(
         IRuleRepository repository,
+        IReserveRepository reserves,
         [FromQuery] int? offset,
         [FromQuery] int? limit,
         [FromQuery] string? type,
@@ -88,9 +90,23 @@ internal static class RuleEndpoints
             new RuleQuery(offset, limit, keyword, type),
             cancellationToken);
 
-        return Results.Ok(new RulesResponse(
-            page.Items.Select(rule => rule.ToResponse(includeReservesCount: type is not null)).ToArray(),
-            page.Total));
+        if (type is null)
+        {
+            return Results.Ok(new RulesResponse(
+                page.Items.Select(rule => rule.ToResponse()).ToArray(),
+                page.Total));
+        }
+
+        var responses = new List<RuleResponse>(page.Items.Count);
+        foreach (RecordingRule rule in page.Items)
+        {
+            Page<Reservation> reservations = await reserves.ListAsync(
+                new ReserveQuery(IsHalfWidth: false, Offset: 0, Limit: 0, Type: type, RuleId: rule.Id),
+                cancellationToken);
+            responses.Add(rule.ToResponse(reservations.Total));
+        }
+
+        return Results.Ok(new RulesResponse(responses, page.Total));
     }
 
     private static async Task<IResult> SearchRuleKeywordsAsync(
@@ -118,12 +134,13 @@ internal static class RuleEndpoints
             ? Results.Json(
                 new ErrorResponse(StatusCodes.Status404NotFound, "Rule is not Found"),
                 statusCode: StatusCodes.Status404NotFound)
-            : Results.Ok(rule.ToResponse(includeReservesCount: false));
+            : Results.Ok(rule.ToResponse());
     }
 
     private static async Task<IResult> AddRuleAsync(
         AddRuleRequest request,
         IRuleRepository repository,
+        IReserveGenerationTrigger generation,
         IOptions<EncodeOptions> encodeOptions,
         CancellationToken cancellationToken)
     {
@@ -131,6 +148,7 @@ internal static class RuleEndpoints
         ValidateRule(rule, encodeOptions.Value, "AddRuleError");
 
         long ruleId = await repository.AddAsync(rule, cancellationToken);
+        await generation.RequestAsync(cancellationToken);
         return Results.Json(new AddedRuleResponse(ruleId), statusCode: StatusCodes.Status201Created);
     }
 
@@ -138,6 +156,7 @@ internal static class RuleEndpoints
         long ruleId,
         AddRuleRequest request,
         IRuleRepository repository,
+        IReserveGenerationTrigger generation,
         IOptions<EncodeOptions> encodeOptions,
         CancellationToken cancellationToken)
     {
@@ -145,6 +164,7 @@ internal static class RuleEndpoints
         ValidateRule(rule, encodeOptions.Value, "UpdateRuleError");
 
         await repository.UpdateAsync(rule, cancellationToken);
+        await generation.RequestAsync(cancellationToken);
         return Ok();
     }
 
@@ -162,15 +182,18 @@ internal static class RuleEndpoints
     private static async Task<IResult> DeleteRuleAsync(
         long ruleId,
         IRuleRepository repository,
+        IReserveGenerationTrigger generation,
         CancellationToken cancellationToken)
     {
         await repository.DeleteAsync(ruleId, cancellationToken);
+        await generation.RequestAsync(cancellationToken);
         return Ok();
     }
 
     private static async Task<IResult> EnableRuleAsync(
         long ruleId,
         IRuleRepository repository,
+        IReserveGenerationTrigger generation,
         CancellationToken cancellationToken)
     {
         if (await repository.GetAsync(ruleId, cancellationToken) is null)
@@ -179,12 +202,14 @@ internal static class RuleEndpoints
         }
 
         await repository.SetEnabledAsync(ruleId, isEnabled: true, cancellationToken);
+        await generation.RequestAsync(cancellationToken);
         return Ok();
     }
 
     private static async Task<IResult> DisableRuleAsync(
         long ruleId,
         IRuleRepository repository,
+        IReserveGenerationTrigger generation,
         CancellationToken cancellationToken)
     {
         if (await repository.GetAsync(ruleId, cancellationToken) is null)
@@ -193,6 +218,7 @@ internal static class RuleEndpoints
         }
 
         await repository.SetEnabledAsync(ruleId, isEnabled: false, cancellationToken);
+        await generation.RequestAsync(cancellationToken);
         return Ok();
     }
 

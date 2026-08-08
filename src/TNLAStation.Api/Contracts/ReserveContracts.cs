@@ -36,6 +36,8 @@ public sealed record ReserveItemResponse(
 {
     public long? RuleId { get; init; }
 
+    public string? RuleName { get; init; }
+
     public IReadOnlyList<long>? Tags { get; init; }
 
     public string? ParentDirectoryName { get; init; }
