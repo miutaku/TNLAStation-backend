@@ -56,7 +56,7 @@ public sealed partial class RecordingScheduler(
                 if (lease is not null)
                 {
                     await recovery.RecoverAsync(stoppingToken);
-                    await RunLoopAsync(interval, stoppingToken);
+                    await RunLoopAsync(lease, interval, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -90,10 +90,19 @@ public sealed partial class RecordingScheduler(
         await StopAllAsync();
     }
 
-    private async Task RunLoopAsync(TimeSpan interval, CancellationToken stoppingToken)
+    private async Task RunLoopAsync(
+        IAsyncDisposable lease,
+        TimeSpan interval,
+        CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            if (!await IsLeaseAliveAsync(lease, stoppingToken))
+            {
+                LogLeaseLost(logger);
+                return;
+            }
+
             try
             {
                 await TickAsync(stoppingToken);
@@ -110,6 +119,18 @@ public sealed partial class RecordingScheduler(
 
             await scheduleSignal.WaitAsync(interval, timeProvider, stoppingToken);
         }
+    }
+
+    private static async ValueTask<bool> IsLeaseAliveAsync(
+        IAsyncDisposable lease,
+        CancellationToken cancellationToken)
+    {
+        if (lease is not IRecordingLeaseHealth health)
+        {
+            return true;
+        }
+
+        return await health.IsAliveAsync(cancellationToken);
     }
 
     private async Task TickAsync(CancellationToken cancellationToken)
@@ -412,4 +433,10 @@ public sealed partial class RecordingScheduler(
         long reserveId,
         string programName,
         Exception exception);
+
+    [LoggerMessage(
+        EventId = 4006,
+        Level = LogLevel.Warning,
+        Message = "The recording lease connection was lost; acquiring a new lease")]
+    private static partial void LogLeaseLost(ILogger logger);
 }

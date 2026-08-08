@@ -53,6 +53,20 @@ public sealed class BackgroundServiceResilienceTests
     }
 
     [Fact]
+    public async Task TheRecordingSchedulerReacquiresALeaseAfterItsConnectionIsLost()
+    {
+        var lease = new LostLeaseProvider();
+        using RecordingScheduler scheduler = CreateScheduler(lease, out FakeTimeProvider time);
+
+        await scheduler.StartAsync(CancellationToken.None);
+        await WaitUntilAsync(() => lease.Acquired >= 2, time);
+        await scheduler.StopAsync(CancellationToken.None);
+
+        Assert.True(lease.Acquired >= 2);
+        Assert.True(lease.Disposed >= 1);
+    }
+
+    [Fact]
     public async Task TheEncodeWorkerSurvivesADatabaseOutageAtStartup()
     {
         // queue確認時にDBが落ちていても、生き残って試し続けることを確かめる。
@@ -144,6 +158,36 @@ public sealed class BackgroundServiceResilienceTests
         private sealed class Lease : IAsyncDisposable
         {
             public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class LostLeaseProvider : IRecordingLeaseProvider
+    {
+        private int acquired;
+        private int disposed;
+
+        public int Acquired => Volatile.Read(ref acquired);
+
+        public int Disposed => Volatile.Read(ref disposed);
+
+        public ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref acquired);
+            return ValueTask.FromResult<IAsyncDisposable?>(new Lease(this));
+        }
+
+        private sealed class Lease(LostLeaseProvider owner) : IAsyncDisposable, IRecordingLeaseHealth
+        {
+            private int checks;
+
+            public ValueTask<bool> IsAliveAsync(CancellationToken cancellationToken) =>
+                ValueTask.FromResult(Interlocked.Increment(ref checks) == 1);
+
+            public ValueTask DisposeAsync()
+            {
+                Interlocked.Increment(ref owner.disposed);
+                return ValueTask.CompletedTask;
+            }
         }
     }
 
