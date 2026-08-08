@@ -1,4 +1,5 @@
 using Npgsql;
+using TNLAStation.Application.Abstractions;
 
 namespace TNLAStation.Infrastructure.Persistence;
 
@@ -27,9 +28,37 @@ internal static class PostgresAdvisoryLease
         return null;
     }
 
-    private sealed class Lease(NpgsqlConnection connection, long lockKey) : IAsyncDisposable
+    private sealed class Lease(NpgsqlConnection connection, long lockKey)
+        : IAsyncDisposable, IRecordingLeaseHealth
     {
         private bool disposed;
+
+        public async ValueTask<bool> IsAliveAsync(CancellationToken cancellationToken)
+        {
+            if (disposed)
+            {
+                return false;
+            }
+
+            try
+            {
+                await using var command = new NpgsqlCommand("SELECT 1", connection);
+                await command.ExecuteScalarAsync(cancellationToken);
+                return true;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (NpgsqlException)
+            {
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
 
         public async ValueTask DisposeAsync()
         {
@@ -44,6 +73,14 @@ internal static class PostgresAdvisoryLease
                 await using var command = new NpgsqlCommand("SELECT pg_advisory_unlock(@lock_key)", connection);
                 command.Parameters.AddWithValue("lock_key", lockKey);
                 await command.ExecuteNonQueryAsync();
+            }
+            catch (NpgsqlException)
+            {
+                // 接続断なら PostgreSQL 側の session lock は既に解放されている。
+            }
+            catch (InvalidOperationException)
+            {
+                // 壊れた接続を閉じればよく、unlock の再試行はできない。
             }
             finally
             {

@@ -70,6 +70,15 @@ public interface IRecordingLeaseProvider
     ValueTask<IAsyncDisposable?> TryAcquireAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// 長時間保持する録画 lease がまだ有効かを確認する。DB 再起動などで session lock を失った
+/// 実体が録画を続けないよう、対応する lease は scheduler の各巡回前に検査される。
+/// </summary>
+public interface IRecordingLeaseHealth
+{
+    ValueTask<bool> IsAliveAsync(CancellationToken cancellationToken);
+}
+
 public interface IChannelLogoProvider
 {
     ValueTask<ReadOnlyMemory<byte>> GetLogoAsync(long channelId, CancellationToken cancellationToken);
