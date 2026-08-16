@@ -9,10 +9,10 @@ public interface ILiveStreamService
     /// <summary>
     /// HLS の配信を始め、stream id を返す。プレイリストは <c>/streamfiles/stream{id}.m3u8</c>。
     /// </summary>
-    ValueTask<long> StartHlsAsync(long channelId, int mode, CancellationToken cancellationToken);
+    ValueTask<long> StartHlsAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken);
 
     /// <summary>LL-HLS の配信を始める。プレイリストは外部の配信サーバー上なので URL も返す。</summary>
-    ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, CancellationToken cancellationToken);
+    ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken);
 
     /// <summary>
     /// 録画済みの HLS 配信を始める。ブラウザーは録った MPEG-2 をそのままでは再生できない。
@@ -21,6 +21,7 @@ public interface ILiveStreamService
         long videoFileId,
         double playPosition,
         int mode,
+        StreamClient client,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -69,6 +70,11 @@ public interface ILiveStreamService
     ValueTask<DirectStreamHandle> TrackDirectStreamAsync(
         DirectStreamDescriptor descriptor,
         CancellationToken cancellationToken);
+}
+
+public sealed record StreamClient(string IpAddress, string? UserAgent)
+{
+    public override string ToString() => UserAgent is null ? IpAddress : $"{IpAddress} ({UserAgent})";
 }
 
 /// <summary>

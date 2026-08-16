@@ -11,6 +11,7 @@ namespace TNLAStation.Api.Endpoints;
 /// </summary>
 internal static class StreamEndpoints
 {
+    private const int MaxUserAgentLength = 512;
     private static readonly (string Format, string Name)[] LiveTranscodedFormats =
     [
         ("m2tsll", "GetLiveM2tsLl"),
@@ -113,22 +114,24 @@ internal static class StreamEndpoints
 
     private static async Task<IResult> StartLiveHlsAsync(
         long channelId,
+        HttpContext context,
         ILiveStreamService streams,
         [FromQuery] int mode,
         CancellationToken cancellationToken = default)
     {
-        long streamId = await streams.StartHlsAsync(channelId, mode, cancellationToken);
+        long streamId = await streams.StartHlsAsync(channelId, mode, DescribeClient(context), cancellationToken);
         return Results.Ok(new StartStreamResponse(streamId));
     }
 
     /// <summary>プレイリストは配信サーバー上なので、stream id だけでは場所が決まらない。</summary>
     private static async Task<IResult> StartLiveLowLatencyAsync(
         long channelId,
+        HttpContext context,
         ILiveStreamService streams,
         [FromQuery] int mode,
         CancellationToken cancellationToken = default)
     {
-        LowLatencyPlayback playback = await streams.StartLowLatencyAsync(channelId, mode, cancellationToken);
+        LowLatencyPlayback playback = await streams.StartLowLatencyAsync(channelId, mode, DescribeClient(context), cancellationToken);
         return Results.Ok(new StartLowLatencyStreamResponse(playback.StreamId, playback.PlaylistUrl));
     }
 
@@ -145,7 +148,7 @@ internal static class StreamEndpoints
     {
         await using Stream source = await streams.OpenLiveStreamAsync(channelId, mode, cancellationToken);
         await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
-            new DirectStreamDescriptor("m2ts", mode, channelId, Client: DescribeClient(context)),
+            new DirectStreamDescriptor("m2ts", mode, channelId, Client: DescribeClient(context).ToString()),
             cancellationToken);
         context.Response.ContentType = "video/mp2t";
         // 放送は終わらないので長さは書けない。書けば、そこで切れたと受け取られる。
@@ -176,7 +179,7 @@ internal static class StreamEndpoints
             mode,
             cancellationToken);
         await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
-            new DirectStreamDescriptor(format, mode, channelId, Client: DescribeClient(context)),
+            new DirectStreamDescriptor(format, mode, channelId, Client: DescribeClient(context).ToString()),
             cancellationToken);
         return await WriteAsync(context, output, tracked, cancellationToken);
     }
@@ -197,7 +200,7 @@ internal static class StreamEndpoints
             ss,
             cancellationToken);
         await using DirectStreamHandle tracked = await streams.TrackDirectStreamAsync(
-            new DirectStreamDescriptor(format, mode, VideoFileId: videoFileId, Client: DescribeClient(context)),
+            new DirectStreamDescriptor(format, mode, VideoFileId: videoFileId, Client: DescribeClient(context).ToString()),
             cancellationToken);
         return await WriteAsync(context, output, tracked, cancellationToken);
     }
@@ -206,16 +209,33 @@ internal static class StreamEndpoints
     /// 誰が掴んでいるのか。止めていいか判断できるよう、address と host を短くまとめる。
     /// host は長いので頭だけ。
     /// </summary>
-    private static string DescribeClient(HttpContext context)
+    private static StreamClient DescribeClient(HttpContext context)
     {
-        string address = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        string address = ClientAddress(context);
         string agent = context.Request.Headers.UserAgent.ToString();
         if (agent.Length == 0)
         {
-            return address;
+            return new StreamClient(address, UserAgent: null);
         }
 
-        return $"{address} ({(agent.Length > 60 ? agent[..60] : agent)})";
+        string normalizedAgent = agent.Length > MaxUserAgentLength ? agent[..MaxUserAgentLength] : agent;
+        return new StreamClient(address, normalizedAgent);
+    }
+
+    /// <summary>
+    /// 同梱 nginx は接続元を X-Real-IP へ上書きしてから backend へ渡す。Kubernetes では
+    /// socket の相手が gateway Pod になるため、このヘッダーを見ないと内部 IP しか取れない。
+    /// カンマや改行を含む値は転送チェーン／不正値なので採用しない。
+    /// </summary>
+    private static string ClientAddress(HttpContext context)
+    {
+        string forwarded = context.Request.Headers["X-Real-IP"].ToString().Trim();
+        if (System.Net.IPAddress.TryParse(forwarded, out System.Net.IPAddress? address))
+        {
+            return address.ToString();
+        }
+
+        return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     private static async Task<IResult> WriteAsync(
@@ -272,12 +292,13 @@ internal static class StreamEndpoints
 
     private static async Task<IResult> StartRecordedHlsAsync(
         long videoFileId,
+        HttpContext context,
         ILiveStreamService streams,
         [FromQuery] double ss,
         [FromQuery] int mode,
         CancellationToken cancellationToken = default)
     {
-        long streamId = await streams.StartRecordedHlsAsync(videoFileId, ss, mode, cancellationToken);
+        long streamId = await streams.StartRecordedHlsAsync(videoFileId, ss, mode, DescribeClient(context), cancellationToken);
         return Results.Ok(new StartStreamResponse(streamId));
     }
 

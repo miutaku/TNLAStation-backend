@@ -83,7 +83,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             TimeSpan.FromSeconds(10));
     }
 
-    public async ValueTask<long> StartHlsAsync(long channelId, int mode, CancellationToken cancellationToken)
+    public async ValueTask<long> StartHlsAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken)
     {
         EpgStationStreamingCmd streamCommand = ResolveLiveConfig("hls", mode);
         EpgChannel channel = await epg.GetChannelAsync(channelId, cancellationToken)
@@ -97,7 +97,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
-            var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
+            var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow())
+            {
+                Client = client.ToString(),
+                ClientIp = client.IpAddress,
+                UserAgent = client.UserAgent,
+            };
             sessions[streamId] = record;
 
             Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
@@ -137,7 +142,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
     /// publish 先は配信サーバーなので、backend からはプレイリストの生成を確認できない。
     /// 待たずに返し、再生側で拾い直す。
     /// </summary>
-    public async ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, CancellationToken cancellationToken)
+    public async ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken)
     {
         string template = options.LowLatencyHls?.PlaylistUrlTemplate is { Length: > 0 } configured
             ? configured
@@ -153,7 +158,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
-            var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow());
+            var record = new SessionRecord(streamId, channelId, channel.Name, mode, videoFileId: null, timeProvider.GetUtcNow())
+            {
+                Client = client.ToString(),
+                ClientIp = client.IpAddress,
+                UserAgent = client.UserAgent,
+            };
             sessions[streamId] = record;
 
             Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
@@ -202,6 +212,7 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         long videoFileId,
         double playPosition,
         int mode,
+        StreamClient client,
         CancellationToken cancellationToken)
     {
         VideoFileLocation file = await videoFiles.GetAsync(videoFileId, cancellationToken)
@@ -221,7 +232,12 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
             await EnsureRoomForOneMoreAsync(cancellationToken);
 
             streamId = Interlocked.Increment(ref lastStreamId);
-            var record = new SessionRecord(streamId, channelId: 0, file.Name, mode, videoFileId, timeProvider.GetUtcNow());
+            var record = new SessionRecord(streamId, channelId: 0, file.Name, mode, videoFileId, timeProvider.GetUtcNow())
+            {
+                Client = client.ToString(),
+                ClientIp = client.IpAddress,
+                UserAgent = client.UserAgent,
+            };
             sessions[streamId] = record;
 
             Uri workerBaseAddress = await SelectWorkerAsync(cancellationToken);
@@ -593,7 +609,10 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                     IsEnable: session.IsRunningCached,
                     ChannelId: 0,
                     session.ChannelName,
-                    VideoFileId: videoFileId));
+                    VideoFileId: videoFileId,
+                    Client: session.Client,
+                    ClientIp: session.ClientIp,
+                    UserAgent: session.UserAgent));
                 continue;
             }
 
@@ -608,7 +627,10 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
                 ProgramId: program?.Id,
                 StartAt: (program?.StartAt ?? session.StartedAt).ToUnixTimeMilliseconds(),
                 EndAt: (program?.EndAt ?? session.StartedAt.AddHours(1)).ToUnixTimeMilliseconds(),
-                Description: program?.Description));
+                Description: program?.Description,
+                Client: session.Client,
+                ClientIp: session.ClientIp,
+                UserAgent: session.UserAgent));
         }
 
         return result;
@@ -859,6 +881,10 @@ public sealed partial class RemoteLiveStreamService : ILiveStreamService, IStrea
         public CancellationTokenSource? DirectLifetime { get; set; }
 
         public string? Client { get; set; }
+
+        public string? ClientIp { get; set; }
+
+        public string? UserAgent { get; set; }
     }
 
     /// <summary>

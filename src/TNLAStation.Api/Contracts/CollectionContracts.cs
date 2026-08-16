@@ -35,6 +35,10 @@ public sealed record StreamInfoItemResponse(
     /// <summary>接続元。EPGStation に無い TNLAStation の追加 (docs/compatibility.md)。</summary>
     public string? Client { get; init; }
 
+    public string? ClientIp { get; init; }
+
+    public string? UserAgent { get; init; }
+
     public long? VideoFileId { get; init; }
 
     public long? StartAt { get; init; }

@@ -7,16 +7,17 @@ namespace TNLAStation.Infrastructure.Streaming;
 /// </summary>
 public sealed class UnavailableLiveStreamService : ILiveStreamService
 {
-    public ValueTask<long> StartHlsAsync(long channelId, int mode, CancellationToken cancellationToken) =>
+    public ValueTask<long> StartHlsAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken) =>
         throw new LiveStreamException("MirakurunIsNotConfigured");
 
-    public ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, CancellationToken cancellationToken) =>
+    public ValueTask<LowLatencyPlayback> StartLowLatencyAsync(long channelId, int mode, StreamClient client, CancellationToken cancellationToken) =>
         throw new LiveStreamException("MirakurunIsNotConfigured");
 
     public ValueTask<long> StartRecordedHlsAsync(
         long videoFileId,
         double playPosition,
         int mode,
+        StreamClient client,
         CancellationToken cancellationToken) =>
         throw new LiveStreamException("MirakurunIsNotConfigured");
 
