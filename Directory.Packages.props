@@ -23,6 +23,6 @@
     <!-- EPGStation の config.yml をそのまま読むため。js-yaml と同じ YAML 1.1/1.2 core の範囲を扱う。 -->
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
 </Project>
