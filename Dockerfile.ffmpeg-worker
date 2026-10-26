@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble AS restore
 WORKDIR /src
 
 COPY global.json Directory.Build.props Directory.Packages.props ./
@@ -23,7 +23,7 @@ RUN dotnet publish src/TNLAStation.FfmpegWorker/TNLAStation.FfmpegWorker.csproj 
     /p:UseAppHost=false \
     /p:NoWarn=CA1861
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble AS final
 ARG APP_UID=1654
 
 # backend コンテナから ffmpeg/ffprobe を切り出した先。ここにだけ apt で入れる。

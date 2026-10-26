@@ -112,7 +112,7 @@ jobs:
           tags: ${{ steps.backend.outputs.tags }}
           labels: ${{ steps.backend.outputs.labels }}
           cache-from: type=gha,scope=backend-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=backend-${{ matrix.arch }}
+          cache-to: type=gha,ignore-error=true,mode=max,scope=backend-${{ matrix.arch }}
 
       - name: Publish ffmpeg-worker architecture image
         uses: docker/build-push-action@v7
@@ -124,7 +124,7 @@ jobs:
           tags: ${{ steps.ffmpeg-worker.outputs.tags }}
           labels: ${{ steps.ffmpeg-worker.outputs.labels }}
           cache-from: type=gha,scope=ffmpeg-worker-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=ffmpeg-worker-${{ matrix.arch }}
+          cache-to: type=gha,ignore-error=true,mode=max,scope=ffmpeg-worker-${{ matrix.arch }}
 
   publish:
     name: Publish multi-architecture manifests

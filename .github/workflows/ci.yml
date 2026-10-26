@@ -54,7 +54,7 @@ jobs:
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.403
           dotnet-quality: ga
 
       - name: Restore and audit NuGet dependencies
@@ -117,7 +117,7 @@ jobs:
           push: false
           tags: tnlastation-backend:ci
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,ignore-error=true,mode=max
 
       - name: Build ffmpeg-worker container image
         uses: docker/build-push-action@v7
@@ -127,4 +127,4 @@ jobs:
           push: false
           tags: tnlastation-ffmpeg-worker:ci
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,ignore-error=true,mode=max
