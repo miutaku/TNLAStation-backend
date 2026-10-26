@@ -76,7 +76,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.app }}
           cache-from: type=gha,scope=backend-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=backend-${{ matrix.arch }}
+          cache-to: type=gha,ignore-error=true,mode=max,scope=backend-${{ matrix.arch }}
 
       - name: Publish FFmpeg Worker staging architecture
         uses: docker/build-push-action@v7
@@ -92,7 +92,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.app }}
           cache-from: type=gha,scope=ffmpeg-worker-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=ffmpeg-worker-${{ matrix.arch }}
+          cache-to: type=gha,ignore-error=true,mode=max,scope=ffmpeg-worker-${{ matrix.arch }}
 
   publish:
     name: Publish multi-architecture manifests

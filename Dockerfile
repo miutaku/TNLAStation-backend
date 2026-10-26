@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS restore
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble AS restore
 WORKDIR /src
 
 COPY global.json Directory.Build.props Directory.Packages.props ./
@@ -31,7 +31,7 @@ RUN dotnet publish src/TNLAStation.Api/TNLAStation.Api.csproj \
     /p:UseAppHost=false \
     /p:Version="$VERSION"
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14-noble AS final
 ARG APP_UID=1654
 
 RUN apt-get update \
