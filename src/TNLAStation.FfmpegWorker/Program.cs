@@ -10,6 +10,7 @@ using TNLAStation.Infrastructure.Configuration.EpgStation;
 using TNLAStation.Infrastructure.DependencyInjection;
 using TNLAStation.Infrastructure.Logging;
 using TNLAStation.Infrastructure.Transcoding;
+using MirakurunConnection = TNLAStation.Infrastructure.Mirakurun.MirakurunConnection;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -46,8 +47,15 @@ builder.Services.AddHttpClient<WorkerMirakurunClient>((serviceProvider, client) 
     MirakurunOptions options = serviceProvider.GetRequiredService<IOptions<MirakurunOptions>>().Value;
     if (options.IsConfigured)
     {
-        client.BaseAddress = new Uri(options.BaseUrl);
+        MirakurunConnection.CreateHandler(options.BaseUrl, out Uri baseAddress).Dispose();
+        client.BaseAddress = baseAddress;
     }
+}).ConfigurePrimaryHttpMessageHandler(serviceProvider =>
+{
+    MirakurunOptions options = serviceProvider.GetRequiredService<IOptions<MirakurunOptions>>().Value;
+    return options.IsConfigured
+        ? MirakurunConnection.CreateHandler(options.BaseUrl, out _)
+        : new HttpClientHandler();
 });
 
 builder.Services.AddSingleton<ProcessGate>();
